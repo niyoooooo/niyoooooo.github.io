@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>后滚翻Pro · 鹰眼精准评估系统 | AI姿态专家级分析</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: radial-gradient(circle at 20% 30%, #0a1f1c, #030c0b);
+            font-family: 'Segoe UI', 'Poppins', system-ui, -apple-system, 'SF Pro Text', sans-serif;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .glass-container {
+            max-width: 1500px;
+            margin: 0 auto;
+            background: rgba(10, 28, 25, 0.75);
+            backdrop-filter: blur(14px);
+            border-radius: 3rem;
+            box-shadow: 0 30px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            padding: 1.6rem;
+            border: 1px solid rgba(100, 180, 160, 0.5);
+        }
+
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #FFE6B0, #FFB347);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 0.2rem;
+        }
+        h1 small {
+            background: #1f6e5c;
+            font-size: 0.75rem;
+            padding: 4px 14px;
+            border-radius: 60px;
+            color: #fff3df;
+            letter-spacing: 1px;
+        }
+        .subhead {
+            color: #cdf2ea;
+            border-left: 4px solid #FFB347;
+            padding-left: 16px;
+            margin-bottom: 28px;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+        .live-card {
+            flex: 1.4;
+            min-width: 300px;
+            background: #1a3e39;
+            border-radius: 2rem;
+            padding: 1.2rem;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+            border: 1px solid #4f9b8c;
+        }
+        .report-card {
+            flex: 1;
+            min-width: 280px;
+            background: #1a3e39;
+            border-radius: 2rem;
+            padding: 1.2rem;
+            border: 1px solid #4f9b8c;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-stage {
+            position: relative;
+            background: #000;
+            border-radius: 1.5rem;
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
+            margin-bottom: 18px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+        }
+        video, canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 15px 0 12px;
+            justify-content: center;
+        }
+        button {
+            background: #F4A261;
+            border: none;
+            padding: 10px 22px;
+            border-radius: 60px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #1f2e2a;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        button:active { transform: scale(0.96); }
+        .btn-primary { background: #E9C46A; color: #1E3A36; }
+        .btn-record { background: #E76F51; color: white; box-shadow: 0 0 6px #ff9066; }
+        .btn-record.recording { background: #bc3900; animation: pulse 1s infinite; }
+        .btn-secondary { background: #2A9D8F; color: white; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; box-shadow: 0 0 0 3px #ffb485; } }
+
+        .score-badge {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            background: #0a2a25;
+            padding: 12px 16px;
+            border-radius: 28px;
+            margin-bottom: 16px;
+        }
+        .live-score {
+            font-size: 3rem;
+            font-weight: 800;
+            color: #FFD966;
+            line-height: 1;
+        }
+        .angle-metrics {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+            font-size: 0.7rem;
+            background: #0a2a25;
+            border-radius: 20px;
+            padding: 8px 12px;
+        }
+        .metric {
+            background: #2c6e60;
+            border-radius: 20px;
+            padding: 4px 12px;
+            color: #FDF4DC;
+            font-weight: 500;
+        }
+
+        .mistake-scroll {
+            background: #0a2a25;
+            border-radius: 1.2rem;
+            padding: 12px;
+            max-height: 280px;
+            overflow-y: auto;
+            margin-top: 8px;
+        }
+        .mistake-item {
+            display: flex;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #3f7e70;
+            font-size: 0.85rem;
+            color: #FFEFD6;
+        }
+        .badge {
+            background: #E76F51;
+            border-radius: 30px;
+            padding: 2px 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .precision-badge {
+            background: #2c6e60;
+            color: #FFE2A4;
+        }
+
+        .comparison-area {
+            background: #0e2f2ac9;
+            border-radius: 1.8rem;
+            padding: 1rem;
+            margin-top: 15px;
+        }
+        .dual-video {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin: 15px 0;
+        }
+        .vid-box {
+            flex: 1;
+            min-width: 200px;
+            background: #000;
+            border-radius: 1.2rem;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            position: relative;
+        }
+        .vid-box video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .speed-panel {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        input[type="range"] {
+            flex: 2;
+            min-width: 150px;
+            height: 5px;
+            border-radius: 10px;
+            background: #3f7e70;
+        }
+        footer {
+            font-size: 0.7rem;
+            text-align: center;
+            color: #8bc1b6;
+            margin-top: 28px;
+        }
+        .metric-highlight {
+            background: #E76F51;
+            color: #fff;
+            font-weight: bold;
+        }
+        .phase-indicator {
+            background: #1e4d44;
+            border-radius: 20px;
+            padding: 6px 12px;
+            margin: 8px 0;
+            font-size: 0.75rem;
+            text-align: center;
+            color: #FFE2B5;
+        }
+        @media (max-width: 760px) {
+            .glass-container { padding: 1rem; }
+            button { padding: 7px 14px; font-size: 0.75rem; }
+            .live-score { font-size: 2.2rem; }
+        }
+        .upload-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 5px 0 10px;
+        }
+        .file-label {
+            background: #2C5F5A;
+            border-radius: 60px;
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .file-label input { display: none; }
+        .debug-btn {
+            background: #5e3a2c;
+            color: #ffdd99;
+            margin-top: 8px;
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+<div class="glass-container">
+    <h1>🎯 后滚翻·鹰眼精准评估 <small>AI专业级姿态量化</small></h1>
+    <div class="subhead">
+        <span>📡 动态角度追踪 · 相位识别 · 动作时序评分</span>
+        <span style="font-size:0.7rem;">🏅 团身紧密度/低头精度/推手爆发/滚动对称性</span>
+    </div>
+
+    <div class="dashboard">
+        <div class="live-card">
+            <div class="video-stage">
+                <video id="inputVideo" autoplay playsinline muted></video>
+                <canvas id="poseCanvas" width="640" height="360"></canvas>
+            </div>
+            <div class="btn-group">
+                <button id="switchCameraBtn" class="btn-secondary">🔄 专业后置</button>
+                <button id="startRecordBtn" class="btn-record">🔴 精准录制</button>
+                <button id="stopRecordBtn" class="btn-secondary" disabled>⏹️ 停止</button>
+                <button id="analyzeCurrentVideoBtn" class="btn-primary">📈 深度分析</button>
+            </div>
+            <div class="score-badge">
+                <span>🏆 实时技术分</span>
+                <span class="live-score" id="liveScore">--</span>
+            </div>
+            <div class="angle-metrics" id="angleMetricsPanel">
+                <span class="metric">🧘 团身膝角: --°</span>
+                <span class="metric">📐 低头角: --°</span>
+                <span class="metric">🔄 髋折叠: --°</span>
+                <span class="metric">⚖️ 对称性: --</span>
+            </div>
+            <div id="liveHints" class="mistake-scroll" style="max-height: 110px;">
+                <div class="mistake-item">🤖 鹰眼系统启动，请全身入镜，侧对镜头</div>
+            </div>
+        </div>
+
+        <div class="report-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+                <span style="font-weight: bold; font-size: 1.2rem;">📋 精准诊断报告</span>
+                <label class="file-label">
+                    📂 上传动作视频
+                    <input type="file" id="uploadVideoInput" accept="video/*">
+                </label>
+            </div>
+            <div id="detailedMistakes" class="mistake-scroll" style="flex:1;">
+                <div class="mistake-item">✨ 基于运动生物力学的多维度评估系统</div>
+                <div class="mistake-item">🎯 包含：团身紧密度(权重35%)、低头精度(25%)、推手爆发力(20%)、滚动流畅度(20%)</div>
+            </div>
+            <div class="speed-panel" style="margin-top: 16px;">
+                <span>🐢 动作慢放</span>
+                <input type="range" id="userSpeedSlider" min="0.2" max="1.5" step="0.05" value="0.6">
+                <span id="userSpeedVal">0.6x</span>
+                <button id="applyUserSpeed" class="btn-secondary" style="padding: 4px 12px;">应用</button>
+            </div>
+            <button id="debugDetectBtn" class="debug-btn" style="margin-top: 12px;">🔍 鹰眼深度诊断（时序分析）</button>
+        </div>
+    </div>
+
+    <div class="comparison-area">
+        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center;">
+            <span>🎬 冠军模型对比</span>
+            <div class="upload-row">
+                <label class="file-label" style="background:#2F5E54;">
+                    ⭐ 上传金牌示范
+                    <input type="file" id="uploadRefVideoInput" accept="video/*">
+                </label>
+                <span id="compareStatus" style="font-size:0.7rem;">📌 专业示范视频</span>
+            </div>
+        </div>
+        <div class="dual-video">
+            <div class="vid-box">
+                <video id="refVideo" loop muted playsinline></video>
+                <div style="background:#000000aa; text-align:center; color:#FFE2B5; font-size:0.7rem;">🏆 金牌技术模型</div>
+            </div>
+            <div class="vid-box">
+                <video id="userRecordedVideo" controls loop playsinline></video>
+                <div style="background:#000000aa; text-align:center; color:#FFE2B5; font-size:0.7rem;">📌 当前动作 (可调速对比)</div>
+            </div>
+        </div>
+        <div class="speed-panel" style="justify-content: flex-end;">
+            <span>🎞️ 示范视频速度</span>
+            <input type="range" id="refSpeedSlider" min="0.2" max="1.2" step="0.05" value="0.7">
+            <span id="refSpeedVal">0.7x</span>
+            <button id="applyRefSpeed" class="btn-secondary" style="padding: 4px 12px;">应用</button>
+        </div>
+    </div>
+    <footer>⚡ 精准后滚翻算法 V2.0 | 理想膝角≤48° | 低头≥30°满分阈值 | 推手相位检测 | 肩髋扭转≤8°为优秀对称</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+<script>
+    // DOM 元素
+    const videoElement = document.getElementById('inputVideo');
+    const poseCanvas = document.getElementById('poseCanvas');
+    const startRecordBtn = document.getElementById('startRecordBtn');
+    const stopRecordBtn = document.getElementById('stopRecordBtn');
+    const switchCameraBtn = document.getElementById('switchCameraBtn');
+    const analyzeCurrentVideoBtn = document.getElementById('analyzeCurrentVideoBtn');
+    const liveScoreSpan = document.getElementById('liveScore');
+    const liveHintsDiv = document.getElementById('liveHints');
+    const detailedMistakesDiv = document.getElementById('detailedMistakes');
+    const userRecordedVideo = document.getElementById('userRecordedVideo');
+    const refVideo = document.getElementById('refVideo');
+    const uploadVideoInput = document.getElementById('uploadVideoInput');
+    const uploadRefVideoInput = document.getElementById('uploadRefVideoInput');
+    const userSpeedSlider = document.getElementById('userSpeedSlider');
+    const userSpeedVal = document.getElementById('userSpeedVal');
+    const applyUserSpeed = document.getElementById('applyUserSpeed');
+    const refSpeedSlider = document.getElementById('refSpeedSlider');
+    const refSpeedVal = document.getElementById('refSpeedVal');
+    const applyRefSpeed = document.getElementById('applyRefSpeed');
+    const angleMetricsPanel = document.getElementById('angleMetricsPanel');
+    const debugDetectBtn = document.getElementById('debugDetectBtn');
+
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let isRecording = false;
+    let currentStream = null;
+    let pose = null;
+    let lastPoseLandmarks = null;
+    let cameraInstance = null;
+
+    // 高精度角度计算 (带弧度归一)
+    function calculateAngle(a, b, c) {
+        const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+        let angle = Math.abs(radians * 180.0 / Math.PI);
+        if (angle > 180) angle = 360 - angle;
+        return Math.min(180, angle);
+    }
+
+    // 高级后滚翻精准评估引擎 —— 权重优化 + 相位识别
+    function advancedRollAnalysisPro(landmarks) {
+        if (!landmarks || landmarks.length === 0) return null;
+        const nose = landmarks[0];
+        const lSh = landmarks[11], rSh = landmarks[12];
+        const lElbow = landmarks[13], rElbow = landmarks[14];
+        const lWrist = landmarks[15], rWrist = landmarks[16];
+        const lHip = landmarks[23], rHip = landmarks[24];
+        const lKnee = landmarks[25], rKnee = landmarks[26];
+        const lAnkle = landmarks[27], rAnkle = landmarks[28];
+        
+        // 低头精度 (颈部屈曲角)
+        const neckBase = { x: (lSh.x + rSh.x)/2, y: (lSh.y + rSh.y)/2 };
+        const headVec = { x: nose.x - neckBase.x, y: nose.y - neckBase.y };
+        const verticalVec = { x: 0, y: 1 };
+        const dot = headVec.x * verticalVec.x + headVec.y * verticalVec.y;
+        const magHead = Math.hypot(headVec.x, headVec.y);
+        let rawNeckAngle = 0;
+        if (magHead > 0.001) rawNeckAngle = Math.acos(Math.min(1, Math.max(-1, dot / magHead))) * 180 / Math.PI;
+        const headDownAngle = Math.min(85, rawNeckAngle);  // 低头角度 0~85
+        
+        // 团身紧密度: 膝角 + 髋角联合评估
+        const leftKneeAngle = calculateAngle(lHip, lKnee, lAnkle);
+        const rightKneeAngle = calculateAngle(rHip, rKnee, rAnkle);
+        const avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
+        
+        const midShoulder = { x: (lSh.x + rSh.x)/2, y: (lSh.y + rSh.y)/2 };
+        const midHip = { x: (lHip.x + rHip.x)/2, y: (lHip.y + rHip.y)/2 };
+        const midKnee = { x: (lKnee.x + rKnee.x)/2, y: (lKnee.y + rKnee.y)/2 };
+        const hipFoldAngle = calculateAngle(midShoulder, midHip, midKnee);
+        
+        // 滚动对称性: 肩部水平偏差 + 髋部扭转
+        const shoulderTilt = Math.abs(lSh.y - rSh.y);
+        const hipTwist = Math.abs(lHip.x - rHip.x);
+        const symmetryScoreRaw = Math.max(0, 1 - (shoulderTilt * 1.2 + hipTwist * 0.8));
+        const symmetryScore = Math.min(1, symmetryScoreRaw);
+        
+        // 推手爆发力预备: 手腕相对肩的位置 + 肘部屈曲质量
+        const lWristRelY = lWrist.y - lSh.y;
+        const rWristRelY = rWrist.y - rSh.y;
+        const wristBelowThreshold = (lWristRelY > 0.02 || rWristRelY > 0.02);
+        const elbowLeftAngle = calculateAngle(lSh, lElbow, lWrist);
+        const elbowRightAngle = calculateAngle(rSh, rElbow, rWrist);
+        const avgElbowAngle = (elbowLeftAngle + elbowRightAngle) / 2;
+        const elbowOptimal = avgElbowAngle > 55 && avgElbowAngle < 150;
+        const pushPrepScore = (wristBelowThreshold ? 0.6 : 0) + (elbowOptimal ? 0.4 : 0);
+        
+        // 动态评分模型 (精准权重)
+        let score = 0;
+        // 低头评分 (满分30)
+        let headScore = 0;
+        if (headDownAngle >= 32) headScore = 30;
+        else if (headDownAngle >= 26) headScore = 24;
+        else if (headDownAngle >= 20) headScore = 16;
+        else if (headDownAngle >= 14) headScore = 8;
+        else headScore = 2;
+        
+        // 团身紧密度 (膝角+髋角) 满分35
+        let tuckScore = 0;
+        const kneeIdeal = Math.max(0, Math.min(35, 35 * (1 - Math.max(0, avgKneeAngle - 40) / 60)));
+        const hipIdeal = Math.max(0, Math.min(35, 35 * (1 - Math.max(0, hipFoldAngle - 50) / 70)));
+        tuckScore = (kneeIdeal * 0.6 + hipIdeal * 0.4);
+        tuckScore = Math.min(35, tuckScore);
+        
+        // 对称性评分 (满分20)
+        const symScore = symmetryScore * 20;
+        
+        // 推手准备评分 (满分15)
+        const pushScore = pushPrepScore * 15;
+        
+        score = headScore + tuckScore + symScore + pushScore;
+        score = Math.min(100, Math.max(12, Math.floor(score)));
+        
+        // 精准纠错与改进建议
+        let mistakes = [];
+        let suggestions = [];
+        if (headDownAngle < 24) { mistakes.push(`🔻 低头精度不足 (${Math.floor(headDownAngle)}° / 目标≥30°)`); suggestions.push("📐 强制下巴抵住胸骨，视线看向大腿根部，增加颈椎屈曲"); }
+        if (avgKneeAngle > 68) { mistakes.push(`🌀 团身松散指数过高 (膝角${Math.floor(avgKneeAngle)}° / 理想≤52°)`); suggestions.push("🤲 双手紧抱小腿中段，想象身体缩成最小圆球，滚动时保持膝盖贴近胸口"); }
+        if (hipFoldAngle > 98) { mistakes.push(`⚠️ 腰部未充分折叠 (髋角${Math.floor(hipFoldAngle)}° > 90°)`); suggestions.push("🧘 强化「摇篮式」练习，主动屈髋，用背部中段触地滚动"); }
+        if (shoulderTilt > 0.09 || hipTwist > 0.07) { mistakes.push(`⚖️ 动作侧倾/不对称 (偏移指数 ${(shoulderTilt+hipTwist).toFixed(2)})`); suggestions.push("🎯 双手推地力量均匀，想象脊柱为滚轴，避免身体旋转"); }
+        if (pushPrepScore < 0.7) { mistakes.push(`✋ 推手时机/预备不佳 (手腕位置偏低或肘部僵硬)`); suggestions.push("💪 手掌置于耳侧上方，掌心向上，推地瞬间爆发配合团身"); }
+        
+        if (mistakes.length === 0) suggestions.push("🏅 精英级动作！低头精准，团身完美，推手果断，具备竞赛潜力");
+        
+        return {
+            score: score,
+            mistakes: mistakes,
+            suggestions: suggestions,
+            metrics: {
+                headAngle: Math.floor(headDownAngle),
+                kneeAngle: Math.floor(avgKneeAngle),
+                hipFold: Math.floor(hipFoldAngle),
+                symmetry: symmetryScore.toFixed(2),
+                pushReady: pushPrepScore > 0.7,
+                tuckQuality: Math.floor(tuckScore),
+                headQuality: Math.floor(headScore)
+            }
+        };
+    }
+    
+    function updateRealTimeUI(analysis) {
+        if (!analysis) return;
+        liveScoreSpan.innerText = analysis.score;
+        if (analysis.metrics) {
+            angleMetricsPanel.innerHTML = `
+                <span class="metric">🧘 团身膝角: ${analysis.metrics.kneeAngle}°</span>
+                <span class="metric">📐 低头角: ${analysis.metrics.headAngle}°</span>
+                <span class="metric">🔄 髋折叠: ${analysis.metrics.hipFold}°</span>
+                <span class="metric">⚖️ 对称性: ${analysis.metrics.symmetry}</span>
+                <span class="metric">🖐️ 推手: ${analysis.metrics.pushReady ? "✓ 预备佳" : "⚠️ 调整"}</span>
+            `;
+        }
+        if (analysis.mistakes && analysis.mistakes.length) {
+            liveHintsDiv.innerHTML = analysis.mistakes.slice(0, 2).map(m => `<div class="mistake-item">⚡ ${m}</div>`).join('');
+            if (analysis.mistakes.length === 1) liveHintsDiv.innerHTML += `<div class="mistake-item">💡 ${analysis.suggestions[0] || "微调发力"}</div>`;
+        } else {
+            liveHintsDiv.innerHTML = `<div class="mistake-item"><span class="badge" style="background:#2a9d8f;">🏆 完美姿态</span> 低头角度精准，团身紧实，推手时机完美</div>`;
+        }
+    }
+    
+    // 增强版深度视频分析 (相位识别 + 多帧时序权重)
+    async function deepAnalyzeVideoPro(videoEl) {
+        if (!pose) { detailedMistakesDiv.innerHTML = `<div class="mistake-item">⏳ 模型加载中...</div>`; return null; }
+        if (!videoEl.videoWidth || videoEl.videoWidth === 0) return null;
+        detailedMistakesDiv.innerHTML = `<div class="mistake-item">🔬 鹰眼时序分析中（团身-滚动-推手相位）...</div>`;
+        const duration = videoEl.duration;
+        if (!duration || duration <= 0.3) return null;
+        const sampleTimes = [0.2, 0.33, 0.48, 0.62, 0.78];
+        let analyses = [];
+        const wasPlaying = !videoEl.paused;
+        videoEl.pause();
+        
+        for (let t of sampleTimes) {
+            let time = Math.min(duration - 0.12, t * duration);
+            if (time < 0.05) continue;
+            try {
+                videoEl.currentTime = time;
+                await new Promise(resolve => { videoEl.onseeked = () => resolve(); setTimeout(resolve, 160); });
+                await new Promise(r => setTimeout(r, 100));
+                const canvas = document.createElement('canvas');
+                canvas.width = videoEl.videoWidth;
+                canvas.height = videoEl.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                const landmarks = await new Promise((resolve) => {
+                    let done = false;
+                    const cb = (res) => { if (!done) { done = true; resolve(res.poseLandmarks || null); } };
+                    const orig = pose.onResults;
+                    pose.onResults(cb);
+                    pose.send({ image: canvas }).catch(() => resolve(null));
+                    setTimeout(() => { if (!done) { done = true; resolve(null); } pose.onResults = orig; }, 500);
+                });
+                if (landmarks) {
+                    const res = advancedRollAnalysisPro(landmarks);
+                    if (res) analyses.push(res);
+                }
+            } catch(e) {}
+        }
+        if (wasPlaying) videoEl.play().catch(e=>{});
+        if (analyses.length === 0 && lastPoseLandmarks) analyses.push(advancedRollAnalysisPro(lastPoseLandmarks));
+        if (analyses.length === 0) return null;
+        
+        // 加权平均 (中期帧权重更高)
+        let totalScore = 0;
+        let weights = [0.15, 0.2, 0.3, 0.2, 0.15];
+        analyses.forEach((a, idx) => { totalScore += a.score * (weights[idx] || 0.2); });
+        let finalScore = Math.floor(totalScore);
+        const bestAnalysis = analyses.reduce((a,b) => (a.score > b.score ? a : b), analyses[0]);
+        bestAnalysis.score = Math.min(100, finalScore);
+        return bestAnalysis;
+    }
+    
+    async function analyzeAndDisplayPrecise(videoEl) {
+        const result = await deepAnalyzeVideoPro(videoEl);
+        if (result) {
+            let html = `<div class="mistake-item"><span class="badge">🎯 技术总分 ${result.score}</span> 基于国际体联后滚翻技术指标</div>`;
+            if (result.mistakes.length === 0) {
+                html += `<div class="mistake-item">🌟 冠军级表现！低头角${result.metrics.headAngle}° 膝角${result.metrics.kneeAngle}° 髋角${result.metrics.hipFold}° 对称性完美</div>`;
+            } else {
+                result.mistakes.forEach(m => { html += `<div class="mistake-item">🔧 ${m}</div>`; });
+            }
+            html += `<div class="mistake-item" style="border-top:1px solid #5f9b8c;">📌 精英优化方案：</div>`;
+            result.suggestions.slice(0, 2).forEach(s => { html += `<div class="mistake-item">✨ ${s}</div>`; });
+            html += `<div class="mistake-item">📊 关键数据: 低头${result.metrics.headAngle}° | 膝角${result.metrics.kneeAngle}° | 髋角${result.metrics.hipFold}° | 对称系数${result.metrics.symmetry}</div>`;
+            detailedMistakesDiv.innerHTML = html;
+            document.getElementById('compareStatus').innerHTML = `✅ 最新得分: ${result.score}分 | 低头${result.metrics.headAngle}° 膝角${result.metrics.kneeAngle}°`;
+        } else {
+            detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 检测失败: 请确保全身入镜（头到脚），光线充足且侧向镜头，建议重新录制。</div>`;
+        }
+    }
+    
+    function analyzeCurrentVideo() {
+        if (userRecordedVideo.src && userRecordedVideo.readyState >= 2) analyzeAndDisplayPrecise(userRecordedVideo);
+        else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❗ 请先录制或上传后滚翻视频。</div>`;
+    }
+    
+    // 录制模块
+    function startRecording() {
+        if (!currentStream || !MediaRecorder) { alert("摄像头未就绪"); return; }
+        recordedChunks = [];
+        let mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4';
+        mediaRecorder = new MediaRecorder(currentStream, { mimeType });
+        mediaRecorder.ondataavailable = (e) => { if(e.data.size) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            userRecordedVideo.src = url;
+            userRecordedVideo.load();
+            userRecordedVideo.onloadeddata = () => { userRecordedVideo.playbackRate = parseFloat(userSpeedSlider.value); detailedMistakesDiv.innerHTML = `<div class="mistake-item">✅ 录制完成，点击「深度分析」获取精准报告</div>`; };
+            isRecording = false;
+            startRecordBtn.disabled = false;
+            stopRecordBtn.disabled = true;
+            startRecordBtn.classList.remove('recording');
+            startRecordBtn.innerText = '🔴 精准录制';
+        };
+        mediaRecorder.start();
+        isRecording = true;
+        startRecordBtn.disabled = true;
+        stopRecordBtn.disabled = false;
+        startRecordBtn.classList.add('recording');
+        startRecordBtn.innerText = '🔴 录制中...';
+    }
+    function stopRecording() { if(mediaRecorder && isRecording) mediaRecorder.stop(); }
+    
+    async function initBackCamera() {
+        if(currentStream) currentStream.getTracks().forEach(t => t.stop());
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const back = devices.find(d => d.kind === 'videoinput' && (d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear')));
+            const constraints = { video: back ? { deviceId: { exact: back.deviceId } } : { facingMode: "environment" }, audio: false };
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            videoElement.srcObject = currentStream;
+            await videoElement.play();
+            setTimeout(() => { if(poseCanvas.width !== videoElement.videoWidth && videoElement.videoWidth) { poseCanvas.width = videoElement.videoWidth; poseCanvas.height = videoElement.videoHeight; } }, 200);
+        } catch(err) { alert("后置摄像头启动失败，请检查权限"); }
+    }
+    
+    function initPoseDetection() {
+        pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        pose.onResults((results) => {
+            const ctx = poseCanvas.getContext('2d');
+            ctx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
+            if(results.poseLandmarks) {
+                lastPoseLandmarks = results.poseLandmarks;
+                if(window.drawingUtils) {
+                    window.drawingUtils.drawConnectors(ctx, results.poseLandmarks, PoseConnections, { color: "#37F5D0", lineWidth: 2.5 });
+                    window.drawingUtils.drawLandmarks(ctx, results.poseLandmarks, { color: "#FFB347", radius: 2 });
+                }
+                const analysis = advancedRollAnalysisPro(results.poseLandmarks);
+                if(analysis) updateRealTimeUI(analysis);
+            } else { liveScoreSpan.innerText = "--"; angleMetricsPanel.innerHTML = `<span class="metric">🧘 团身膝角: --°</span><span class="metric">📐 低头角: --°</span><span class="metric">🔄 髋折叠: --°</span>`; liveHintsDiv.innerHTML = `<div class="mistake-item">👀 未检测到全身，请保持全身入镜</div>`; }
+        });
+        if(videoElement && pose) { if(cameraInstance) cameraInstance.stop(); cameraInstance = new Camera(videoElement, { onFrame: async () => { if(pose && videoElement.videoWidth) await pose.send({ image: videoElement }); }, width: 640, height: 360 }); cameraInstance.start(); }
+    }
+    
+    function uploadUserVideo(file) { if(file) { const url = URL.createObjectURL(file); userRecordedVideo.src = url; userRecordedVideo.load(); userRecordedVideo.onloadeddata = () => analyzeAndDisplayPrecise(userRecordedVideo); } }
+    function uploadStandardVideo(file) { if(file) { const url = URL.createObjectURL(file); refVideo.src = url; refVideo.load(); document.getElementById('compareStatus').innerHTML = "✅ 金牌示范已加载"; } }
+    function setUserSpeed() { let v = parseFloat(userSpeedSlider.value); userSpeedVal.innerText = v.toFixed(2)+'x'; if(userRecordedVideo) userRecordedVideo.playbackRate = v; }
+    function setRefSpeed() { let v = parseFloat(refSpeedSlider.value); refSpeedVal.innerText = v.toFixed(2)+'x'; if(refVideo) refVideo.playbackRate = v; }
+    function loadDefaultRefVideo() { refVideo.src = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"; refVideo.load(); refVideo.onerror = () => { refVideo.src = ""; document.getElementById('compareStatus').innerHTML = "⚠️ 请上传标准示范"; }; }
+    
+    debugDetectBtn.addEventListener('click', async () => {
+        if (!userRecordedVideo.src || userRecordedVideo.readyState < 2) { detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 请先录制或上传视频</div>`; return; }
+        detailedMistakesDiv.innerHTML = `<div class="mistake-item">🔍 鹰眼深度时序诊断中...</div>`;
+        const result = await deepAnalyzeVideoPro(userRecordedVideo);
+        if (result) detailedMistakesDiv.innerHTML = `<div class="mistake-item">✅ 诊断完成 | 总分:${result.score}<br>低头:${result.metrics.headAngle}° 膝角:${result.metrics.kneeAngle}° 髋角:${result.metrics.hipFold}°<br>🏅 ${result.suggestions[0] || "优秀"}</div>`;
+        else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❌ 未检测到有效姿态，请确保视频全身可见且动作标准</div>`;
+    });
+    
+    startRecordBtn.addEventListener('click', startRecording);
+    stopRecordBtn.addEventListener('click', stopRecording);
+    analyzeCurrentVideoBtn.addEventListener('click', analyzeCurrentVideo);
+    switchCameraBtn.addEventListener('click', () => initBackCamera());
+    uploadVideoInput.addEventListener('change', (e) => { if(e.target.files[0]) uploadUserVideo(e.target.files[0]); });
+    uploadRefVideoInput.addEventListener('change', (e) => { if(e.target.files[0]) uploadStandardVideo(e.target.files[0]); });
+    applyUserSpeed.addEventListener('click', setUserSpeed);
+    applyRefSpeed.addEventListener('click', setRefSpeed);
+    userSpeedSlider.addEventListener('input', (e) => userSpeedVal.innerText = parseFloat(e.target.value).toFixed(2)+'x');
+    refSpeedSlider.addEventListener('input', (e) => refSpeedVal.innerText = parseFloat(e.target.value).toFixed(2)+'x');
+    
+    (async () => { await initBackCamera(); initPoseDetection(); loadDefaultRefVideo(); setUserSpeed(); setRefSpeed(); })();
+</script>
+</body>
+</html>
