@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>后滚翻Pro · 体操礼仪加持 | 鹰眼评估</title>
+    <title>后滚翻Pro · 体操礼仪加持 | 鹰眼评估 (优化版)</title>
     <style>
         * {
             margin: 0;
@@ -196,6 +196,7 @@
             border-bottom: 1px solid #3f7e70;
             font-size: 0.85rem;
             color: #FFEFD6;
+            flex-wrap: wrap;
         }
         .badge {
             background: #E76F51;
@@ -443,7 +444,7 @@
             <button id="applyRefSpeed" class="btn-secondary" style="padding: 4px 12px;">应用</button>
         </div>
     </div>
-    <footer>⚡ 鸿蒙动态降频引擎 | 推理≤12fps | 礼仪检测集成于深度分析</footer>
+    <footer>⚡ 鸿蒙动态降频引擎 | 推理≤12fps | 礼仪检测优化版 | 多帧投票提高通过率</footer>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -782,14 +783,14 @@
             });
         }
         
-        // ---------- 礼仪检测函数 ----------
-        // 检测开始举手：双臂上举，手腕高于肩膀，且手臂伸直
-        async function detectSalute(videoEl, tempPose, startRatio = 0.1, endRatio = 0.25) {
+        // ================== 优化后的礼仪检测函数 ==================
+        // 检测开始举手：双臂上举，手腕高于肩膀，肘部伸展
+        async function detectSalute(videoEl, tempPose, startRatio = 0.05, endRatio = 0.25) {
             const duration = videoEl.duration;
             if (!duration || duration <= 0.5) return false;
             const startTime = duration * startRatio;
             const endTime = duration * endRatio;
-            const sampleCount = 4;
+            const sampleCount = 5;  // 增加采样数
             let successCount = 0;
             for (let i = 0; i < sampleCount; i++) {
                 const t = startTime + (i / (sampleCount-1)) * (endTime - startTime);
@@ -811,26 +812,35 @@
                     if (landmarks && landmarks.length > 0) {
                         const lWrist = landmarks[15], rWrist = landmarks[16];
                         const lShoulder = landmarks[11], rShoulder = landmarks[12];
-                        if (lWrist && rWrist && lShoulder && rShoulder) {
+                        const lElbow = landmarks[13], rElbow = landmarks[14];
+                        if (lWrist && rWrist && lShoulder && rShoulder && lElbow && rElbow) {
+                            // 条件1: 手腕高于肩膀 (y坐标更小)
                             const leftUp = lWrist.y < lShoulder.y;
                             const rightUp = rWrist.y < rShoulder.y;
-                            const leftOut = Math.abs(lWrist.x - lShoulder.x) < 0.25;
-                            const rightOut = Math.abs(rWrist.x - rShoulder.x) < 0.25;
-                            if (leftUp && rightUp && leftOut && rightOut) successCount++;
+                            // 条件2: 手臂基本伸直 (肘角 > 140度 或 手腕-肘-肩夹角接近180)
+                            const leftElbowAngle = calculateAngle(lShoulder, lElbow, lWrist);
+                            const rightElbowAngle = calculateAngle(rShoulder, rElbow, rWrist);
+                            const armExtended = leftElbowAngle > 140 && rightElbowAngle > 140;
+                            // 条件3: 手臂不要过分外扩 (肘部横向偏移适中)
+                            const leftArmOut = Math.abs(lWrist.x - lShoulder.x) < 0.35;
+                            const rightArmOut = Math.abs(rWrist.x - rShoulder.x) < 0.35;
+                            if (leftUp && rightUp && armExtended && leftArmOut && rightArmOut) {
+                                successCount++;
+                            }
                         }
                     }
                 } catch(e) {}
             }
-            return successCount >= sampleCount * 0.6; // 至少60%帧合格
+            return successCount >= sampleCount * 0.5; // 50%通过即可，更宽容
         }
         
-        // 检测结束亮相：身体直立，双臂侧平举或上举，手腕与肩同高或更高
-        async function detectFinishPose(videoEl, tempPose, startRatio = 0.85, endRatio = 0.98) {
+        // 检测结束亮相：身体直立 + 双臂侧平举或上举 (手腕与肩同高或更高)
+        async function detectFinishPose(videoEl, tempPose, startRatio = 0.82, endRatio = 0.98) {
             const duration = videoEl.duration;
             if (!duration || duration <= 0.5) return false;
             const startTime = duration * startRatio;
             const endTime = duration * endRatio;
-            const sampleCount = 4;
+            const sampleCount = 6;
             let successCount = 0;
             for (let i = 0; i < sampleCount; i++) {
                 const t = startTime + (i / (sampleCount-1)) * (endTime - startTime);
@@ -850,11 +860,11 @@
                         setTimeout(() => resolve(null), 400);
                     });
                     if (landmarks && landmarks.length > 0) {
-                        const nose = landmarks[0];
                         const lShoulder = landmarks[11], rShoulder = landmarks[12];
                         const lHip = landmarks[23], rHip = landmarks[24];
                         const lWrist = landmarks[15], rWrist = landmarks[16];
-                        // 身体直立：肩髋连线接近垂直
+                        const lAnkle = landmarks[27], rAnkle = landmarks[28];
+                        // 条件1: 身体直立 (肩髋连线与垂直轴夹角 < 25度)
                         const midShoulder = { x: (lShoulder.x + rShoulder.x)/2, y: (lShoulder.y + rShoulder.y)/2 };
                         const midHip = { x: (lHip.x + rHip.x)/2, y: (lHip.y + rHip.y)/2 };
                         const torsoVec = { x: midShoulder.x - midHip.x, y: midShoulder.y - midHip.y };
@@ -864,21 +874,24 @@
                         let upright = true;
                         if (mag > 0.01) {
                             const angle = Math.acos(Math.min(1, Math.max(-1, dot / mag))) * 180 / Math.PI;
-                            upright = angle < 20; // 倾斜小于20度
+                            upright = angle < 25; // 放宽到25度
                         }
-                        // 亮相姿态：双臂侧平举或上举 (手腕y坐标不显著低于肩膀)
-                        const armExtended = (Math.abs(lWrist.y - lShoulder.y) < 0.15 && Math.abs(rWrist.y - rShoulder.y) < 0.15) ||
-                                            (lWrist.y < lShoulder.y && rWrist.y < rShoulder.y);
+                        // 条件2: 双臂打开 (手腕与肩的横向距离较大 或 手腕高于肩)
                         const armSide = (Math.abs(lWrist.x - lShoulder.x) > 0.2 && Math.abs(rWrist.x - rShoulder.x) > 0.2);
-                        const validFinish = upright && armExtended && armSide;
-                        if (validFinish) successCount++;
+                        const armUp = (lWrist.y < lShoulder.y && rWrist.y < rShoulder.y);
+                        const armOpen = armSide || armUp;
+                        // 条件3: 手腕不显著低于肩膀 (允许轻微下垂)
+                        const notDrooping = (lWrist.y < lShoulder.y + 0.1 && rWrist.y < rShoulder.y + 0.1);
+                        if (upright && armOpen && notDrooping) {
+                            successCount++;
+                        }
                     }
                 } catch(e) {}
             }
-            return successCount >= sampleCount * 0.6;
+            return successCount >= sampleCount * 0.5; // 50%通过率
         }
         
-        // ---------- 深度分析 (含礼仪) ----------
+        // ---------- 深度分析 (含优化后礼仪) ----------
         async function deepAnalyzeVideoPro(videoEl) {
             if (!videoEl || !videoEl.videoWidth) return null;
             const duration = videoEl.duration;
@@ -916,11 +929,13 @@
                 } catch(e) {}
             }
             
-            // 礼仪检测
+            // 礼仪检测 (优化后)
             let saluteOk = false, finishOk = false;
             try {
                 saluteOk = await detectSalute(videoEl, tempPose);
                 finishOk = await detectFinishPose(videoEl, tempPose);
+                // 可选：控制台输出调试信息，默认注释
+                // console.log(`礼仪检测结果 - 举手:${saluteOk}, 亮相:${finishOk}`);
             } catch(e) { console.warn(e); }
             
             tempPose.close();
@@ -932,7 +947,7 @@
             const bestAnalysis = analyses.reduce((a,b) => (a.score > b.score ? a : b), analyses[0]);
             bestAnalysis.score = finalScore;
             
-            // 礼仪加减分（各5分，未完成则扣分）
+            // 礼仪加减分（各5分）
             let etiquettePenalty = 0;
             let etiquetteMessages = [];
             if (!saluteOk) { etiquettePenalty += 5; etiquetteMessages.push("❌ 开始未举手示意（扣5分）"); }
@@ -972,7 +987,7 @@
                 html += `<div class="mistake-item">💡 优化建议：${result.suggestions[0] || "继续保持"}</div>`;
                 detailedMistakesDiv.innerHTML = html;
                 compareStatus.innerHTML = `✅ 得分: ${result.score}分`;
-                // 同时更新实时锁定的分数展示（若用户需要）
+                // 同时更新实时锁定的分数展示
                 if (!isScoreLocked) {
                     lastValidAnalysis = result;
                     liveScoreSpan.innerText = result.score;
