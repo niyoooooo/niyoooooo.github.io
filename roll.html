@@ -501,336 +501,656 @@
         const refRestartBtn = document.getElementById('refRestartBtn');
         const refSeekSlider = document.getElementById('refSeekSlider');
 
-        // ---------- 配置常量 ----------
-        const MIN_VIDEO_DURATION = 1.0; // 最小视频时长（秒）
-        const MIN_BRIGHTNESS = 40;      // 最小亮度阈值
-        const VALID_FRAME_RATIO = 0.5;  // 有效帧占比
-
         // ---------- 全局变量 ----------
         let mediaRecorder = null;
         let recordedChunks = [];
         let isRecording = false;
         let currentStream = null;
         let pose = null;
-
-        // ---------- 帧捕获工具函数 ----------
-        function seekToAndCapture(videoEl, time) {
-            return new Promise((resolve) => {
-                const canvas = document.createElement('canvas');
-                canvas.width = videoEl.videoWidth || videoEl.clientWidth;
-                canvas.height = videoEl.videoHeight || videoEl.clientHeight;
-                
-                // 克隆视频避免影响原播放状态
-                const cloneVideo = document.createElement('video');
-                cloneVideo.src = videoEl.src;
-                cloneVideo.preload = 'metadata';
-                
-                cloneVideo.addEventListener('loadedmetadata', () => {
-                    cloneVideo.currentTime = Math.min(time, cloneVideo.duration - 0.1);
-                    cloneVideo.addEventListener('seeked', () => {
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(cloneVideo, 0, 0, canvas.width, canvas.height);
-                        resolve(canvas);
-                    });
-                    cloneVideo.addEventListener('error', () => resolve(null));
-                });
-            });
+        let isProcessingFrame = false;
+        let lastValidAnalysis = null;
+        let frameRequestId = null;
+        let isFrameLoopActive = false;
+        let isScoreLocked = false;
+        let lastUITimestamp = 0;
+        let lastInferenceTimestamp = 0;
+        let inferenceIntervalMs = 83;        // 默认约12fps推理
+        let originalInferenceInterval = 83;
+        let currentFacingMode = 'environment';
+        
+        const UI_UPDATE_INTERVAL_MS = 80;
+        
+        // ---------- 核心角度计算 (与原逻辑一致) ----------
+        function calculateAngle(a, b, c) {
+            const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+            let angle = Math.abs(radians * 180.0 / Math.PI);
+            if (angle > 180) angle = 360 - angle;
+            return Math.min(180, angle);
         }
 
-        // ---------- 光线检测优化函数 ----------
-        async function detectLightCondition(videoEl, sampleFrames = 8) {
-            if (!videoEl.duration || videoEl.duration < 1) return { isDark: true, reason: '视频时长不足' };
+        function advancedRollAnalysisPro(landmarks) {
+            if (!landmarks || landmarks.length === 0) return null;
+            const nose = landmarks[0];
+            const lSh = landmarks[11], rSh = landmarks[12];
+            const lElbow = landmarks[13], rElbow = landmarks[14];
+            const lWrist = landmarks[15], rWrist = landmarks[16];
+            const lHip = landmarks[23], rHip = landmarks[24];
+            const lKnee = landmarks[25], rKnee = landmarks[26];
+            const lAnkle = landmarks[27], rAnkle = landmarks[28];
             
-            let totalBrightness = 0;
-            let validFrames = 0;
-            const duration = videoEl.duration;
-
-            // 采样视频中间段（避开开头/结尾黑屏帧）
-            const sampleStart = duration * 0.2;
-            const sampleEnd = duration * 0.8;
-            const step = (sampleEnd - sampleStart) / sampleFrames;
-
-            for (let i = 0; i < sampleFrames; i++) {
-                const time = sampleStart + (i * step);
-                const frameCanvas = await seekToAndCapture(videoEl, time);
-                if (!frameCanvas) continue;
-
-                // 计算帧亮度（分块计算，避免局部暗区误判）
-                const ctx = frameCanvas.getContext('2d');
-                const imageData = ctx.getImageData(0, 0, frameCanvas.width, frameCanvas.height);
-                const data = imageData.data;
-                let brightness = 0;
-                let pixelCount = 0;
-
-                // 隔行采样（提升性能，避免全量计算）
-                for (let j = 0; j < data.length; j += 4 * 10) {
-                    const r = data[j];
-                    const g = data[j + 1];
-                    const b = data[j + 2];
-                    brightness += (r + g + b) / 3; // 灰度值
-                    pixelCount++;
+            const neckBase = { x: (lSh.x + rSh.x)/2, y: (lSh.y + rSh.y)/2 };
+            const headVec = { x: nose.x - neckBase.x, y: nose.y - neckBase.y };
+            const verticalVec = { x: 0, y: 1 };
+            const dot = headVec.x * verticalVec.x + headVec.y * verticalVec.y;
+            const magHead = Math.hypot(headVec.x, headVec.y);
+            let rawNeckAngle = 0;
+            if (magHead > 0.001) rawNeckAngle = Math.acos(Math.min(1, Math.max(-1, dot / magHead))) * 180 / Math.PI;
+            const headDownAngle = Math.min(85, rawNeckAngle);
+            
+            let headScore = 0;
+            if (headDownAngle >= 35) headScore = 30;
+            else if (headDownAngle >= 30) headScore = 28;
+            else if (headDownAngle >= 25) headScore = 22;
+            else if (headDownAngle >= 20) headScore = 16;
+            else if (headDownAngle >= 15) headScore = 10;
+            else if (headDownAngle >= 10) headScore = 5;
+            else headScore = 0;
+            
+            const leftKneeAngle = calculateAngle(lHip, lKnee, lAnkle);
+            const rightKneeAngle = calculateAngle(rHip, rKnee, rAnkle);
+            const avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
+            let kneeScore = 0;
+            if (avgKneeAngle <= 45) kneeScore = 20;
+            else if (avgKneeAngle <= 50) kneeScore = 18;
+            else if (avgKneeAngle <= 60) kneeScore = 14;
+            else if (avgKneeAngle <= 70) kneeScore = 9;
+            else if (avgKneeAngle <= 85) kneeScore = 4;
+            else kneeScore = 0;
+            
+            const midShoulder = { x: (lSh.x + rSh.x)/2, y: (lSh.y + rSh.y)/2 };
+            const midHip = { x: (lHip.x + rHip.x)/2, y: (lHip.y + rHip.y)/2 };
+            const midKnee = { x: (lKnee.x + rKnee.x)/2, y: (lKnee.y + rKnee.y)/2 };
+            const hipFoldAngle = calculateAngle(midShoulder, midHip, midKnee);
+            let hipScore = 0;
+            if (hipFoldAngle <= 70) hipScore = 15;
+            else if (hipFoldAngle <= 80) hipScore = 13;
+            else if (hipFoldAngle <= 90) hipScore = 9;
+            else if (hipFoldAngle <= 100) hipScore = 5;
+            else if (hipFoldAngle <= 110) hipScore = 2;
+            else hipScore = 0;
+            
+            let tuckScore = kneeScore + hipScore;
+            const shoulderTilt = Math.abs(lSh.y - rSh.y);
+            const hipTwist = Math.abs(lHip.x - rHip.x);
+            let symmetryPenalty = (shoulderTilt * 2.5 + hipTwist * 1.5);
+            symmetryPenalty = Math.min(20, symmetryPenalty * 100);
+            let symScore = Math.max(0, 20 - symmetryPenalty);
+            
+            const lWristRelY = lWrist.y - lSh.y;
+            const rWristRelY = rWrist.y - rSh.y;
+            const wristBelowThreshold = (lWristRelY > 0.03 && rWristRelY > 0.03);
+            const elbowLeftAngle = calculateAngle(lSh, lElbow, lWrist);
+            const elbowRightAngle = calculateAngle(rSh, rElbow, rWrist);
+            const avgElbowAngle = (elbowLeftAngle + elbowRightAngle) / 2;
+            const elbowOptimal = avgElbowAngle > 60 && avgElbowAngle < 140;
+            let pushScore = 0;
+            if (wristBelowThreshold && elbowOptimal) pushScore = 15;
+            else if (wristBelowThreshold || elbowOptimal) pushScore = 10;
+            else if (avgElbowAngle > 40 && avgElbowAngle < 160) pushScore = 5;
+            else pushScore = 0;
+            
+            let score = headScore + tuckScore + symScore + pushScore;
+            score = Math.min(100, Math.max(0, Math.floor(score)));
+            
+            let mistakes = [];
+            if (headDownAngle < 28) mistakes.push(`🔻 低头不足 (${Math.floor(headDownAngle)}° / 优秀≥30°) 扣${30 - headScore}分`);
+            if (avgKneeAngle > 55) mistakes.push(`🌀 团身松散 (膝角${Math.floor(avgKneeAngle)}° / 优秀≤50°) 扣${20 - kneeScore}分`);
+            if (hipFoldAngle > 85) mistakes.push(`⚠️ 髋部折叠不足 (${Math.floor(hipFoldAngle)}° / 优秀≤80°) 扣${15 - hipScore}分`);
+            if (symScore < 15) mistakes.push(`⚖️ 身体侧倾 (对称分${symScore.toFixed(1)}/20)`);
+            if (pushScore < 12) mistakes.push(`✋ 推手发力不足 (得分${pushScore}/15)`);
+            if (mistakes.length === 0) mistakes.push("✅ 所有指标优秀！动作标准规范");
+            
+            return {
+                score: score,
+                mistakes: mistakes,
+                suggestions: mistakes.length === 0 ? ["🏆 精英级动作！继续保持完美姿态"] : ["👍 针对性改进可冲击高分"],
+                metrics: {
+                    headAngle: Math.floor(headDownAngle),
+                    kneeAngle: Math.floor(avgKneeAngle),
+                    hipFold: Math.floor(hipFoldAngle),
+                    symmetry: symScore.toFixed(1),
+                    headScore, kneeScore, hipScore, symScore, pushScore
                 }
-
-                if (pixelCount === 0) continue;
-                const avgBrightness = brightness / pixelCount;
-                // 亮度阈值放宽（原阈值可能过严）
-                if (avgBrightness > MIN_BRIGHTNESS) {
-                    validFrames++;
-                    totalBrightness += avgBrightness;
-                }
+            };
+        }
+        
+        // 节流UI更新
+        function throttledUpdateUI(analysis, now) {
+            if (!analysis || isScoreLocked) return false;
+            if (now - lastUITimestamp >= UI_UPDATE_INTERVAL_MS) {
+                liveScoreSpan.innerText = analysis.score;
+                angleMetricsPanel.innerHTML = `
+                    <span class="metric ${analysis.metrics.kneeAngle <= 50 ? 'metric-excellent' : ''}">🧘 团身膝角: ${analysis.metrics.kneeAngle}°</span>
+                    <span class="metric ${analysis.metrics.headAngle >= 30 ? 'metric-excellent' : ''}">📐 低头角: ${analysis.metrics.headAngle}°</span>
+                    <span class="metric ${analysis.metrics.hipFold <= 80 ? 'metric-excellent' : ''}">🔄 髋折叠: ${analysis.metrics.hipFold}°</span>
+                    <span class="metric">⚖️ 对称性: ${analysis.metrics.symmetry}</span>
+                    <span class="metric">🖐️ 推手: ${analysis.metrics.pushScore}/15</span>
+                `;
+                let displayMistakes = analysis.mistakes.filter(m => !m.includes("✅")).slice(0, 2);
+                if (displayMistakes.length) liveHintsDiv.innerHTML = displayMistakes.map(m => `<div class="mistake-item">⚡ ${m}</div>`).join('');
+                else liveHintsDiv.innerHTML = `<div class="mistake-item"><span class="badge badge-success">🏆 完美姿态</span> 低头精准(${analysis.metrics.headAngle}°)，团身紧实</div>`;
+                lastUITimestamp = now;
+                return true;
             }
-
-            // 判定逻辑：有效帧占比>50% 且平均亮度>阈值 则光线正常
-            const validRatio = validFrames / sampleFrames;
-            const avgTotalBrightness = totalBrightness / (validFrames || 1);
-            const isDark = validRatio < VALID_FRAME_RATIO || avgTotalBrightness < MIN_BRIGHTNESS;
-
-            if (isDark) {
-                return { 
-                    isDark: true, 
-                    reason: `光线不足（有效帧占比：${(validRatio*100).toFixed(0)}%，平均亮度：${avgTotalBrightness.toFixed(0)}）` 
-                };
-            }
-            return { isDark: false, reason: '光线正常' };
+            return false;
         }
 
-        // ---------- 深度分析函数（含Pose检测优化） ----------
-        async function deepAnalyzeWithEtiquette(videoEl) {
-            // 清空原有诊断
-            detailedMistakesDiv.innerHTML = '';
-            
-            // 1. 先检测时长
-            const durationValid = videoEl.duration > MIN_VIDEO_DURATION;
-            if (!durationValid) {
-                detailedMistakesDiv.innerHTML += `<div class="mistake-item">⚠️ 视频时长需大于1秒（当前：${videoEl.duration.toFixed(1)}秒）</div>`;
-                return;
-            }
-
-            // 2. 检测光线
-            const lightResult = await detectLightCondition(videoEl);
-            if (lightResult.isDark) {
-                detailedMistakesDiv.innerHTML += `<div class="mistake-item">⚠️ ${lightResult.reason}</div>`;
-            } else {
-                detailedMistakesDiv.innerHTML += `<div class="mistake-item">✅ ${lightResult.reason}</div>`;
-            }
-
-            // 3. 检测Pose关键点
-            const tempPose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-            tempPose.setOptions({ modelComplexity: 1, minDetectionConfidence: 0.3 }); // 降低检测阈值
-            
-            let poseDetected = false;
-            tempPose.onResults((results) => {
-                if (results.poseLandmarks && results.poseLandmarks.length > 0) {
-                    poseDetected = true;
-                }
-            });
-
-            // 采样3帧检测Pose
-            const sampleTimes = [videoEl.duration * 0.2, videoEl.duration * 0.5, videoEl.duration * 0.8];
-            for (const time of sampleTimes) {
-                const frameCanvas = await seekToAndCapture(videoEl, time);
-                if (frameCanvas) await tempPose.send({ image: frameCanvas });
-            }
-
-            if (!poseDetected) {
-                // 明确提示“未检测到人体”，而非“光线不足”
-                detailedMistakesDiv.innerHTML += `<div class="mistake-item">⚠️ 未检测到人体关键点（可能是角度/遮挡问题，非光线不足）</div>`;
-                tempPose.close();
-                return;
-            } else {
-                detailedMistakesDiv.innerHTML += `<div class="mistake-item">✅ 人体关键点检测正常</div>`;
-            }
-
-            // 4. 原有礼仪检测+评分逻辑（保留您原有的业务逻辑）
-            // 【此处替换为您原有的评分/礼仪检测代码】
-            detailedMistakesDiv.innerHTML += `<div class="mistake-item">✅ 深度分析完成，礼仪评分已计入总分</div>`;
-            
-            tempPose.close();
-        }
-
-        // ---------- 上传视频处理（修复时长检测） ----------
-        uploadVideoInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            // 创建临时视频对象并等待元数据加载
-            const tempVideo = document.createElement('video');
-            tempVideo.src = URL.createObjectURL(file);
-            tempVideo.preload = 'metadata';
-            
-            // 等待元数据加载完成后再处理
-            tempVideo.addEventListener('loadedmetadata', async () => {
-                console.log('视频元数据加载完成，时长：', tempVideo.duration);
-                
-                // 时长检测
-                const validDuration = tempVideo.duration && tempVideo.duration > MIN_VIDEO_DURATION;
-                if (!validDuration) {
-                    detailedMistakesDiv.innerHTML += `<div class="mistake-item">⚠️ 视频时长不足1秒（实际：${tempVideo.duration?.toFixed(1) || 0}秒）</div>`;
-                    return;
-                }
-
-                // 加载到预览视频
-                userRecordedVideo.src = tempVideo.src;
-                await userRecordedVideo.play().catch(err => console.log('播放失败:', err));
-                compareStatus.innerText = '✅ 本地视频已加载';
-                
-                // 触发深度分析
-                await deepAnalyzeWithEtiquette(tempVideo);
-            });
-            
-            // 捕获元数据加载失败
-            tempVideo.addEventListener('error', () => {
-                detailedMistakesDiv.innerHTML += `<div class="mistake-item">⚠️ 视频元数据解析失败，请更换视频格式（推荐MP4）</div>`;
-            });
-        });
-
-        // ---------- 视频播放控制（原有逻辑保留） ----------
-        // 自定义速度控制
-        userSpeedSlider.addEventListener('input', () => {
-            userSpeedVal.textContent = `${userSpeedSlider.value}x`;
-        });
-        applyUserSpeed.addEventListener('click', () => {
-            userRecordedVideo.playbackRate = parseFloat(userSpeedSlider.value);
-        });
-
-        refSpeedSlider.addEventListener('input', () => {
-            refSpeedVal.textContent = `${refSpeedSlider.value}x`;
-        });
-        applyRefSpeed.addEventListener('click', () => {
-            refVideo.playbackRate = parseFloat(refSpeedSlider.value);
-        });
-
-        // 播放/暂停/重放控制
-        userPlayBtn.addEventListener('click', () => userRecordedVideo.play());
-        userPauseBtn.addEventListener('click', () => userRecordedVideo.pause());
-        userRestartBtn.addEventListener('click', () => {
-            userRecordedVideo.currentTime = 0;
-            userRecordedVideo.play();
-        });
-        userSeekSlider.addEventListener('input', () => {
-            userRecordedVideo.currentTime = userSeekSlider.value;
-        });
-        userRecordedVideo.addEventListener('timeupdate', () => {
-            userSeekSlider.max = userRecordedVideo.duration;
-            userSeekSlider.value = userRecordedVideo.currentTime;
-        });
-
-        refPlayBtn.addEventListener('click', () => refVideo.play());
-        refPauseBtn.addEventListener('click', () => refVideo.pause());
-        refRestartBtn.addEventListener('click', () => {
-            refVideo.currentTime = 0;
-            refVideo.play();
-        });
-        refSeekSlider.addEventListener('input', () => {
-            refVideo.currentTime = refSeekSlider.value;
-        });
-        refVideo.addEventListener('timeupdate', () => {
-            refSeekSlider.max = refVideo.duration;
-            refSeekSlider.value = refVideo.currentTime;
-        });
-
-        // 示范视频上传
-        uploadRefVideoInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                refVideo.src = URL.createObjectURL(file);
-                compareStatus.innerText = '✅ 金牌示范视频已加载';
-            }
-        });
-
-        // 调试诊断按钮
-        debugDetectBtn.addEventListener('click', async () => {
-            if (userRecordedVideo.src) {
-                await deepAnalyzeWithEtiquette(userRecordedVideo);
-            } else {
-                detailedMistakesDiv.innerHTML += `<div class="mistake-item">⚠️ 请先上传或录制视频</div>`;
-            }
-        });
-
-        // ---------- 摄像头与录制逻辑（保留您原有逻辑） ----------
-        // 初始化摄像头（简化示例，您可替换为原有完整逻辑）
-        async function initCamera() {
-            try {
-                currentStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
-                });
-                videoElement.srcObject = currentStream;
-                cameraErrorMsgDiv.style.display = 'none';
-                retryCameraBtn.style.display = 'none';
-            } catch (err) {
-                cameraErrorMsgDiv.textContent = `摄像头授权失败: ${err.message}`;
-                cameraErrorMsgDiv.style.display = 'block';
-                retryCameraBtn.style.display = 'inline-block';
+        function lockCurrentScore(analysis) {
+            if (!isScoreLocked && analysis) {
+                isScoreLocked = true;
+                liveScoreSpan.innerText = analysis.score;
+                scoreLockIndicator.innerText = '🔒 已锁定';
+                scoreLockIndicator.style.background = '#E76F51';
+                liveHintsDiv.innerHTML = `<div class="mistake-item">🔒 录制已停止，最终得分 ${analysis.score} 分。点击「重置分数」可继续实时评估。</div>`;
+                // 将最终分析存入 lastValidAnalysis 供重置时恢复
+                lastValidAnalysis = analysis;
             }
         }
+        
+        function resetScoreLock() {
+            isScoreLocked = false;
+            scoreLockIndicator.innerText = '🔓 实时';
+            scoreLockIndicator.style.background = '#2c6e60';
+            if (lastValidAnalysis) throttledUpdateUI(lastValidAnalysis, performance.now());
+            else liveScoreSpan.innerText = '--';
+        }
 
-        // 切换摄像头
-        switchCameraBtn.addEventListener('click', () => {
+        // ---------- 摄像头流管理 ----------
+        async function initCameraStream(preferBack = true) {
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
             }
-            initCamera(); // 简化切换逻辑，您可扩展前后置切换
-        });
-
-        // 重新授权摄像头
-        retryCameraBtn.addEventListener('click', initCamera);
-
-        // 录制逻辑
-        startRecordBtn.addEventListener('click', async () => {
-            if (!currentStream) return;
+            cameraErrorMsgDiv.style.display = 'none';
+            retryCameraBtn.style.display = 'none';
             
+            let constraints = { video: true, audio: false };
+            if (preferBack) {
+                try {
+                    constraints = { video: { facingMode: { exact: "environment" } }, audio: false };
+                } catch(e) { /* fallback */ }
+            } else {
+                constraints = { video: { facingMode: "user" }, audio: false };
+            }
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = stream;
+                await videoElement.play().catch(e => {
+                    cameraErrorMsgDiv.innerHTML = `<span>⚠️ 请点击屏幕任意位置以启动摄像头</span>`;
+                    cameraErrorMsgDiv.style.display = 'flex';
+                    const resumePlay = () => {
+                        videoElement.play().catch(()=>{});
+                        document.removeEventListener('click', resumePlay);
+                    };
+                    document.addEventListener('click', resumePlay);
+                });
+                currentStream = stream;
+                currentFacingMode = preferBack ? 'environment' : 'user';
+                const waitForDimensions = () => {
+                    if (videoElement.videoWidth && videoElement.videoHeight) {
+                        poseCanvas.width = videoElement.videoWidth;
+                        poseCanvas.height = videoElement.videoHeight;
+                    } else setTimeout(waitForDimensions, 100);
+                };
+                waitForDimensions();
+                // 添加 loadedmetadata 确保画布尺寸更新
+                videoElement.addEventListener('loadedmetadata', () => {
+                    poseCanvas.width = videoElement.videoWidth;
+                    poseCanvas.height = videoElement.videoHeight;
+                });
+                return true;
+            } catch (err) {
+                cameraErrorMsgDiv.innerHTML = `<span>⚠️ 摄像头启动失败: ${err.message || '请检查权限'}</span>`;
+                cameraErrorMsgDiv.style.display = 'flex';
+                retryCameraBtn.style.display = 'inline-flex';
+                return false;
+            }
+        }
+        
+        function stopFrameLoop() { 
+            if (frameRequestId) cancelAnimationFrame(frameRequestId); 
+            isFrameLoopActive = false; 
+            isProcessingFrame = false; 
+        }
+        
+        function startFrameLoop() {
+            if (frameRequestId) stopFrameLoop();
+            if (!pose || !videoElement.srcObject) return;
+            isFrameLoopActive = true;
+            const processFrame = async (now) => {
+                if (!isFrameLoopActive) return;
+                if (pose && videoElement.videoWidth && videoElement.videoHeight && videoElement.readyState >= 2 && !isProcessingFrame) {
+                    const elapsed = now - lastInferenceTimestamp;
+                    if (elapsed >= inferenceIntervalMs) {
+                        isProcessingFrame = true;
+                        try {
+                            await pose.send({ image: videoElement });
+                        } catch(e) { /* 静默 */ }
+                        isProcessingFrame = false;
+                        lastInferenceTimestamp = now;
+                    }
+                }
+                frameRequestId = requestAnimationFrame(processFrame);
+            };
+            frameRequestId = requestAnimationFrame(processFrame);
+        }
+        
+        async function setupCameraAndDetection(preferBack = true) {
+            const success = await initCameraStream(preferBack);
+            if (success && pose) { 
+                stopFrameLoop(); 
+                startFrameLoop(); 
+            }
+            return success;
+        }
+        
+        async function switchCamera() { 
+            const newMode = currentFacingMode === 'environment' ? false : true;
+            await setupCameraAndDetection(newMode); 
+        }
+        
+        function retryCamera() { setupCameraAndDetection(true); }
+        
+        // ---------- MediaPipe 初始化 ----------
+        function initPoseDetection() {
+            if (pose) pose.close();
+            pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
+            pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            pose.onResults((results) => {
+                const ctx = poseCanvas.getContext('2d');
+                ctx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
+                if(results.poseLandmarks) {
+                    if(window.drawingUtils) {
+                        window.drawingUtils.drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS || [[0,1]], { color: "#37F5D0", lineWidth: 2 });
+                        window.drawingUtils.drawLandmarks(ctx, results.poseLandmarks, { color: "#FFB347", radius: 1.8 });
+                    }
+                    const analysis = advancedRollAnalysisPro(results.poseLandmarks);
+                    if (analysis) {
+                        lastValidAnalysis = analysis;
+                        if (!isScoreLocked) {
+                            const now = performance.now();
+                            throttledUpdateUI(analysis, now);
+                        }
+                    }
+                } else if (!isScoreLocked && lastValidAnalysis) {
+                    const now = performance.now();
+                    throttledUpdateUI(lastValidAnalysis, now);
+                }
+            });
+        }
+        
+        // ================== 优化后的礼仪检测辅助函数 ==================
+        // 可靠跳帧并捕获 Canvas
+        function seekToAndCapture(video, time, timeout = 1000) {
+            return new Promise((resolve) => {
+                if (Math.abs(video.currentTime - time) < 0.05) {
+                    captureFrame(video).then(resolve);
+                    return;
+                }
+                const onSeeked = () => {
+                    video.removeEventListener('seeked', onSeeked);
+                    captureFrame(video).then(resolve);
+                };
+                video.addEventListener('seeked', onSeeked);
+                video.currentTime = time;
+                setTimeout(() => {
+                    video.removeEventListener('seeked', onSeeked);
+                    resolve(null);
+                }, timeout);
+            });
+        }
+        
+        async function captureFrame(video) {
+            await new Promise(r => setTimeout(r, 30)); // 等待渲染
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas;
+        }
+        
+        // 检测开始举手：双臂上举，手腕高于肩膀，肘部伸展 (阈值放宽)
+        async function detectSalute(videoEl, tempPose, startRatio = 0.05, endRatio = 0.25) {
+            const duration = videoEl.duration;
+            if (!duration || duration <= 0.5) return false;
+            const startTime = duration * startRatio;
+            const endTime = duration * endRatio;
+            const sampleCount = 5;
+            let successCount = 0;
+            for (let i = 0; i < sampleCount; i++) {
+                const t = startTime + (i / (sampleCount-1)) * (endTime - startTime);
+                if (t >= duration) break;
+                try {
+                    const canvas = await seekToAndCapture(videoEl, t);
+                    if (!canvas) continue;
+                    const landmarks = await new Promise((resolve) => {
+                        tempPose.onResults((res) => resolve(res.poseLandmarks));
+                        tempPose.send({ image: canvas }).catch(() => resolve(null));
+                        setTimeout(() => resolve(null), 400);
+                    });
+                    if (landmarks && landmarks.length > 0) {
+                        const lWrist = landmarks[15], rWrist = landmarks[16];
+                        const lShoulder = landmarks[11], rShoulder = landmarks[12];
+                        const lElbow = landmarks[13], rElbow = landmarks[14];
+                        if (lWrist && rWrist && lShoulder && rShoulder && lElbow && rElbow) {
+                            // 条件1: 手腕高于肩膀 (y坐标更小)
+                            const leftUp = lWrist.y < lShoulder.y;
+                            const rightUp = rWrist.y < rShoulder.y;
+                            // 条件2: 手臂基本伸直 (肘角 > 120°)
+                            const leftElbowAngle = calculateAngle(lShoulder, lElbow, lWrist);
+                            const rightElbowAngle = calculateAngle(rShoulder, rElbow, rWrist);
+                            const armExtended = leftElbowAngle > 120 && rightElbowAngle > 120;
+                            // 条件3: 手臂不要过分外扩 (肘部横向偏移适中)
+                            const leftArmOut = Math.abs(lWrist.x - lShoulder.x) < 0.4;
+                            const rightArmOut = Math.abs(rWrist.x - rShoulder.x) < 0.4;
+                            if (leftUp && rightUp && armExtended && leftArmOut && rightArmOut) {
+                                successCount++;
+                            }
+                        }
+                    }
+                } catch(e) {}
+            }
+            return successCount >= sampleCount * 0.5;
+        }
+        
+        // 检测结束亮相：身体直立 + 双臂侧平举或上举 (手腕与肩同高或更高)
+        async function detectFinishPose(videoEl, tempPose, startRatio = 0.82, endRatio = 0.98) {
+            const duration = videoEl.duration;
+            if (!duration || duration <= 0.5) return false;
+            const startTime = duration * startRatio;
+            const endTime = duration * endRatio;
+            const sampleCount = 6;
+            let successCount = 0;
+            for (let i = 0; i < sampleCount; i++) {
+                const t = startTime + (i / (sampleCount-1)) * (endTime - startTime);
+                if (t >= duration) break;
+                try {
+                    const canvas = await seekToAndCapture(videoEl, t);
+                    if (!canvas) continue;
+                    const landmarks = await new Promise((resolve) => {
+                        tempPose.onResults((res) => resolve(res.poseLandmarks));
+                        tempPose.send({ image: canvas }).catch(() => resolve(null));
+                        setTimeout(() => resolve(null), 400);
+                    });
+                    if (landmarks && landmarks.length > 0) {
+                        const lShoulder = landmarks[11], rShoulder = landmarks[12];
+                        const lHip = landmarks[23], rHip = landmarks[24];
+                        const lWrist = landmarks[15], rWrist = landmarks[16];
+                        // 条件1: 身体直立 (肩髋连线与垂直轴夹角 < 25°)
+                        const midShoulder = { x: (lShoulder.x + rShoulder.x)/2, y: (lShoulder.y + rShoulder.y)/2 };
+                        const midHip = { x: (lHip.x + rHip.x)/2, y: (lHip.y + rHip.y)/2 };
+                        const torsoVec = { x: midShoulder.x - midHip.x, y: midShoulder.y - midHip.y };
+                        const verticalVec = { x: 0, y: 1 };
+                        const dot = torsoVec.x * verticalVec.x + torsoVec.y * verticalVec.y;
+                        const mag = Math.hypot(torsoVec.x, torsoVec.y);
+                        let upright = true;
+                        if (mag > 0.01) {
+                            const angle = Math.acos(Math.min(1, Math.max(-1, dot / mag))) * 180 / Math.PI;
+                            upright = angle < 25;
+                        }
+                        // 条件2: 双臂打开 (手腕横向距离 > 肩宽0.2 或 手腕高于肩)
+                        const shoulderWidth = Math.abs(lShoulder.x - rShoulder.x);
+                        const wristSpread = Math.abs(lWrist.x - rWrist.x);
+                        const armSide = wristSpread > shoulderWidth * 0.6;
+                        const armUp = (lWrist.y < lShoulder.y && rWrist.y < rShoulder.y);
+                        const armOpen = armSide || armUp;
+                        // 条件3: 手腕不显著低于肩膀 (允许轻微下垂)
+                        const notDrooping = (lWrist.y < lShoulder.y + 0.1 && rWrist.y < rShoulder.y + 0.1);
+                        if (upright && armOpen && notDrooping) {
+                            successCount++;
+                        }
+                    }
+                } catch(e) {}
+            }
+            return successCount >= sampleCount * 0.5;
+        }
+        
+        // ---------- 深度分析 (含优化后礼仪) ----------
+        async function deepAnalyzeVideoPro(videoEl) {
+            if (!videoEl || !videoEl.videoWidth) return null;
+            const duration = videoEl.duration;
+            if (!duration || duration <= 0.3) return null;
+            const sampleTimes = [0.2, 0.32, 0.48, 0.62, 0.78];
+            let analyses = [];
+            const wasPlaying = !videoEl.paused;
+            videoEl.pause();
+            const tempPose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
+            tempPose.setOptions({ modelComplexity: 1, smoothLandmarks: true });
+            // 等待 MediaPipe 初始化完成
+            try {
+                await new Promise((resolve, reject) => {
+                    tempPose.initialize().then(resolve).catch(reject);
+                    setTimeout(() => reject(new Error('MediaPipe 初始化超时')), 5000);
+                });
+            } catch(e) {
+                tempPose.close();
+                if (wasPlaying) videoEl.play().catch(e=>{});
+                return null;
+            }
+            
+            // 技术动作采样
+            for (let t of sampleTimes) {
+                let time = Math.min(duration - 0.12, t * duration);
+                if (time < 0.05) continue;
+                try {
+                    const canvas = await seekToAndCapture(videoEl, time);
+                    if (!canvas) continue;
+                    const landmarks = await new Promise((resolve) => {
+                        tempPose.onResults((res) => resolve(res.poseLandmarks));
+                        tempPose.send({ image: canvas }).catch(() => resolve(null));
+                        setTimeout(() => resolve(null), 450);
+                    });
+                    if (landmarks) {
+                        const res = advancedRollAnalysisPro(landmarks);
+                        if (res) analyses.push(res);
+                    }
+                } catch(e) {}
+            }
+            
+            // 礼仪检测 (优化后)
+            let saluteOk = false, finishOk = false;
+            try {
+                saluteOk = await detectSalute(videoEl, tempPose);
+                finishOk = await detectFinishPose(videoEl, tempPose);
+            } catch(e) { console.warn(e); }
+            
+            tempPose.close();
+            if (wasPlaying) videoEl.play().catch(e=>{});
+            if (analyses.length === 0) return null;
+            let totalScore = 0;
+            analyses.forEach(a => totalScore += a.score);
+            let finalScore = Math.floor(totalScore / analyses.length);
+            const bestAnalysis = analyses.reduce((a,b) => (a.score > b.score ? a : b), analyses[0]);
+            bestAnalysis.score = finalScore;
+            
+            // 礼仪加减分（各5分）
+            let etiquettePenalty = 0;
+            let etiquetteMessages = [];
+            if (!saluteOk) { etiquettePenalty += 5; etiquetteMessages.push("❌ 开始未举手示意（扣5分）"); }
+            else { etiquetteMessages.push("✅ 开始举手示意标准"); }
+            if (!finishOk) { etiquettePenalty += 5; etiquetteMessages.push("❌ 结束未完成亮相展体（扣5分）"); }
+            else { etiquetteMessages.push("✅ 结束亮相姿态优美"); }
+            
+            const originalScore = bestAnalysis.score;
+            let newScore = originalScore - etiquettePenalty;
+            newScore = Math.max(0, Math.min(100, newScore));
+            bestAnalysis.score = newScore;
+            bestAnalysis.etiquette = { saluteOk, finishOk, penalty: etiquettePenalty, messages: etiquetteMessages };
+            bestAnalysis.originalTechScore = originalScore;
+            
+            // 合并错误信息
+            if (!saluteOk || !finishOk) {
+                bestAnalysis.mistakes = bestAnalysis.mistakes.filter(m => !m.includes("✅"));
+                if (!saluteOk) bestAnalysis.mistakes.unshift("🤝 礼仪扣分: 开始缺少举手示意 (-5)");
+                if (!finishOk) bestAnalysis.mistakes.unshift("🤝 礼仪扣分: 结束缺少亮相展体 (-5)");
+            } else {
+                bestAnalysis.mistakes.unshift("🏅 礼仪满分: 举手+亮相均完成");
+            }
+            return bestAnalysis;
+        }
+        
+        async function analyzeAndDisplayPrecise(videoEl) {
+            const result = await deepAnalyzeVideoPro(videoEl);
+            if (result) {
+                let html = `<div class="mistake-item"><span class="badge ${result.score >= 85 ? 'badge-success' : ''}">🎯 综合得分 ${result.score}</span> (技术分${result.originalTechScore} 礼仪扣${result.etiquette.penalty})</div>`;
+                html += `<div class="mistake-item">📊 低头:${result.metrics.headAngle}° (${result.metrics.headScore}/30) | 膝角:${result.metrics.kneeAngle}° (${result.metrics.kneeScore}/20) | 髋角:${result.metrics.hipFold}° (${result.metrics.hipScore}/15)</div>`;
+                html += `<div class="mistake-item">⚖️ 对称得分:${result.metrics.symmetry}/20 | 推手得分:${result.metrics.pushScore}/15</div>`;
+                html += `<div class="mistake-item">🎖️ 礼仪: ${result.etiquette.messages.join(' · ')}</div>`;
+                if (result.mistakes.length > 0 && !result.mistakes[0].includes("✅")) {
+                    html += `<div class="mistake-item" style="border-top:1px solid #5f9b8c;">🔧 扣分项：</div>`;
+                    result.mistakes.slice(0, 4).forEach(m => { if(!m.includes("✅")) html += `<div class="mistake-item">• ${m}</div>`; });
+                }
+                html += `<div class="mistake-item">💡 优化建议：${result.suggestions[0] || "继续保持"}</div>`;
+                detailedMistakesDiv.innerHTML = html;
+                compareStatus.innerHTML = `✅ 得分: ${result.score}分`;
+                // 同时更新实时锁定的分数展示
+                if (!isScoreLocked) {
+                    lastValidAnalysis = result;
+                    liveScoreSpan.innerText = result.score;
+                }
+            } else detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 检测失败: 请确保全身入镜，光线充足，且视频长度大于1秒</div>`;
+        }
+        
+        function analyzeCurrentVideo() {
+            if (userRecordedVideo.src && userRecordedVideo.readyState >= 2) analyzeAndDisplayPrecise(userRecordedVideo);
+            else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❗ 请先录制或上传后滚翻视频。</div>`;
+        }
+        
+        // ---------- 录制 ----------
+        function getSupportedMimeType() {
+            const types = ['video/webm', 'video/mp4', ''];
+            for (let type of types) {
+                if (type && MediaRecorder.isTypeSupported(type)) return type;
+            }
+            return '';
+        }
+        
+        function startRecording() {
+            if (!currentStream || !MediaRecorder) { alert("摄像头未就绪"); return; }
+            recordedChunks = [];
+            const mimeType = getSupportedMimeType();
+            try {
+                mediaRecorder = new MediaRecorder(currentStream, { mimeType: mimeType || undefined });
+            } catch(e) { alert("录制初始化失败"); return; }
+            mediaRecorder.ondataavailable = (e) => { if(e.data.size) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(recordedChunks, { type: mimeType || 'video/mp4' });
+                const url = URL.createObjectURL(blob);
+                if (userRecordedVideo.src && userRecordedVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src);
+                userRecordedVideo.src = url;
+                userRecordedVideo.load();
+                userRecordedVideo.onloadeddata = async () => { 
+                    userRecordedVideo.playbackRate = parseFloat(userSpeedSlider.value);
+                    // 录制结束后自动进行深度分析并锁定最终分数
+                    const finalAnalysis = await deepAnalyzeVideoPro(userRecordedVideo);
+                    if (finalAnalysis) {
+                        lockCurrentScore(finalAnalysis);
+                        // 可选更新报告区域
+                        analyzeAndDisplayPrecise(userRecordedVideo);
+                    } else {
+                        lockCurrentScore(lastValidAnalysis); // 降级使用最后一帧
+                    }
+                    if(userRecordedVideo.duration && isFinite(userRecordedVideo.duration)) userSeekSlider.max = 100;
+                };
+                isRecording = false;
+                startRecordBtn.disabled = false;
+                stopRecordBtn.disabled = true;
+                startRecordBtn.classList.remove('recording');
+                startRecordBtn.innerText = '🔴 精准录制';
+                inferenceIntervalMs = originalInferenceInterval;
+            };
+            mediaRecorder.start();
             isRecording = true;
-            startRecordBtn.classList.add('recording');
             startRecordBtn.disabled = true;
             stopRecordBtn.disabled = false;
-            recordedChunks = [];
-
-            mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm; codecs=vp9' });
-            mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
-            mediaRecorder.start(100);
+            startRecordBtn.classList.add('recording');
+            startRecordBtn.innerText = '🔴 录制中...';
+            if (isScoreLocked) resetScoreLock();
+            inferenceIntervalMs = 166;
+        }
+        
+        function stopRecording() { if(mediaRecorder && isRecording) mediaRecorder.stop(); }
+        
+        function setUserSpeedSafe() { let v = parseFloat(userSpeedSlider.value); userSpeedVal.innerText = v.toFixed(2)+'x'; if (userRecordedVideo) userRecordedVideo.playbackRate = v; }
+        function setRefSpeedSafe() { let v = parseFloat(refSpeedSlider.value); refSpeedVal.innerText = v.toFixed(2)+'x'; if (refVideo) refVideo.playbackRate = v; }
+        function uploadUserVideo(file) { 
+            if(file) { 
+                if(isScoreLocked) resetScoreLock(); 
+                const url = URL.createObjectURL(file); 
+                if(userRecordedVideo.src && userRecordedVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src);
+                userRecordedVideo.src = url; 
+                userRecordedVideo.load(); 
+                userRecordedVideo.onloadeddata = () => analyzeAndDisplayPrecise(userRecordedVideo);
+            } 
+        }
+        function uploadStandardVideo(file) { 
+            if(file) { 
+                const url = URL.createObjectURL(file); 
+                if(refVideo.src && refVideo.src.startsWith('blob:')) URL.revokeObjectURL(refVideo.src);
+                refVideo.src = url; 
+                refVideo.load();
+                refVideo.onloadeddata = () => { compareStatus.innerHTML = "✅ 金牌示范已加载"; refVideo.playbackRate = parseFloat(refSpeedSlider.value); };
+            } 
+        }
+        
+        function setupVideoControls(video, playBtn, pauseBtn, restartBtn, seekSlider) {
+            if (!video) return;
+            const updateSlider = () => { if (video.duration && isFinite(video.duration) && video.duration > 0) seekSlider.value = (video.currentTime / video.duration) * 100; };
+            video.addEventListener('timeupdate', updateSlider);
+            video.addEventListener('loadedmetadata', () => { if (video.duration && isFinite(video.duration)) { seekSlider.max = 100; seekSlider.value = 0; } });
+            playBtn.addEventListener('click', (e) => { e.stopPropagation(); video.play().catch(()=>{}); });
+            pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); video.pause(); });
+            restartBtn.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime = 0; video.play().catch(()=>{}); });
+            seekSlider.addEventListener('input', (e) => { if (video.duration && isFinite(video.duration) && video.duration > 0) video.currentTime = (e.target.value / 100) * video.duration; });
+        }
+        
+        // ---------- 事件绑定 ----------
+        startRecordBtn.addEventListener('click', startRecording);
+        stopRecordBtn.addEventListener('click', stopRecording);
+        analyzeCurrentVideoBtn.addEventListener('click', analyzeCurrentVideo);
+        switchCameraBtn.addEventListener('click', switchCamera);
+        retryCameraBtn.addEventListener('click', retryCamera);
+        uploadVideoInput.addEventListener('change', (e) => { if(e.target.files[0]) uploadUserVideo(e.target.files[0]); });
+        uploadRefVideoInput.addEventListener('change', (e) => { if(e.target.files[0]) uploadStandardVideo(e.target.files[0]); });
+        applyUserSpeed.addEventListener('click', setUserSpeedSafe);
+        applyRefSpeed.addEventListener('click', setRefSpeedSafe);
+        userSpeedSlider.addEventListener('input', (e) => userSpeedVal.innerText = parseFloat(e.target.value).toFixed(2)+'x');
+        refSpeedSlider.addEventListener('input', (e) => refSpeedVal.innerText = parseFloat(e.target.value).toFixed(2)+'x');
+        resetScoreBtn.addEventListener('click', resetScoreLock);
+        debugDetectBtn.addEventListener('click', async () => {
+            if (!userRecordedVideo.src || userRecordedVideo.readyState < 2) { detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 请先录制或上传视频</div>`; return; }
+            detailedMistakesDiv.innerHTML = `<div class="mistake-item">🔍 鹰眼深度诊断中（含礼仪）...</div>`;
+            const result = await deepAnalyzeVideoPro(userRecordedVideo);
+            if (result) {
+                let html = `<div class="mistake-item">✅ 诊断完成 | 总分:${result.score} (技术原分${result.originalTechScore} 礼仪扣${result.etiquette.penalty})<br>低头:${result.metrics.headAngle}° (${result.metrics.headScore}/30) 膝角:${result.metrics.kneeAngle}° (${result.metrics.kneeScore}/20)<br>🎖️ ${result.etiquette.messages.join(' · ')}<br>🏅 ${result.suggestions[0] || "优秀"}</div>`;
+                detailedMistakesDiv.innerHTML = html;
+            } else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❌ 未检测到有效姿态</div>`;
         });
-
-        stopRecordBtn.addEventListener('click', () => {
-            if (!mediaRecorder || !isRecording) return;
-            
-            mediaRecorder.stop();
-            isRecording = false;
-            startRecordBtn.classList.remove('recording');
-            startRecordBtn.disabled = false;
-            stopRecordBtn.disabled = true;
-
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                const videoUrl = URL.createObjectURL(blob);
-                userRecordedVideo.src = videoUrl;
-                compareStatus.innerText = '✅ 已录制动作视频';
-            };
-        });
-
-        // 初始化
-        initCamera();
-
-        // 重置分数
-        resetScoreBtn.addEventListener('click', () => {
-            liveScoreSpan.textContent = '--';
-            scoreLockIndicator.textContent = '🔓 实时';
-            angleMetricsPanel.innerHTML = `
-                <span class="metric">🧘 团身膝角: --°</span>
-                <span class="metric">📐 低头角: --°</span>
-                <span class="metric">🔄 髋折叠: --°</span>
-                <span class="metric">⚖️ 对称性: --</span>
-            `;
-        });
-
-        // 实时分析按钮
-        analyzeCurrentVideoBtn.addEventListener('click', async () => {
-            if (userRecordedVideo.src) {
-                await deepAnalyzeWithEtiquette(userRecordedVideo);
-            } else {
-                liveHintsDiv.innerHTML += `<div class="mistake-item">⚠️ 请先录制动作视频</div>`;
-            }
-        });
-
+        setupVideoControls(userRecordedVideo, userPlayBtn, userPauseBtn, userRestartBtn, userSeekSlider);
+        setupVideoControls(refVideo, refPlayBtn, refPauseBtn, refRestartBtn, refSeekSlider);
+        
+        // 启动应用
+        (async () => {
+            initPoseDetection();
+            await setupCameraAndDetection(true);
+            setUserSpeedSafe();
+            setRefSpeedSafe();
+            originalInferenceInterval = inferenceIntervalMs;
+            if (window.drawingUtils === undefined) window.drawingUtils = drawingUtils;
+            lastValidAnalysis = null;
+        })();
     })();
 </script>
 </body>
