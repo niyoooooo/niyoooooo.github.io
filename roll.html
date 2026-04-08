@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>后滚翻Pro · 鹰眼精准评估 | 实时稳定版</title>
+    <title>后滚翻Pro · 鹰眼稳定增强版 | 实时识别修复</title>
     <style>
         * {
             margin: 0;
@@ -139,6 +139,7 @@
         .btn-record.recording { background: #bc3900; animation: pulse 1s infinite; }
         .btn-secondary { background: #2A9D8F; color: white; }
         .btn-reset { background: #5e6b5e; color: #FFE6B0; }
+        .btn-debug { background: #4f6d5e; color: #FFF3DF; font-size: 0.7rem; padding: 6px 14px; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; box-shadow: 0 0 0 3px #ffb485; } }
 
         .score-badge {
@@ -315,12 +316,6 @@
             background: #3f8a7a;
         }
         .file-label input { display: none; }
-        .debug-btn {
-            background: #5e3a2c;
-            color: #ffdd99;
-            margin-top: 8px;
-            font-size: 0.75rem;
-        }
         .status-badge {
             font-size: 0.7rem;
             background: #2c6e60;
@@ -330,12 +325,21 @@
         }
         .detection-status {
             background: #1e4d43;
-            font-size: 0.7rem;
-            padding: 5px 12px;
+            font-size: 0.75rem;
+            padding: 6px 12px;
             border-radius: 30px;
             display: inline-block;
-            margin-top: 6px;
+            margin-top: 8px;
             color: #FFE6B0;
+            font-weight: 500;
+        }
+        .warning-tip {
+            background: #a85d32;
+            color: #fff0c0;
+            margin-top: 8px;
+            font-size: 0.7rem;
+            border-radius: 24px;
+            padding: 5px 12px;
         }
         @media (max-width: 760px) {
             .glass-container { padding: 1rem; }
@@ -347,7 +351,7 @@
 </head>
 <body>
 <div class="glass-container">
-    <h1>🎯 后滚翻·鹰眼精准评估 <small>稳定版 V3.2</small></h1>
+    <h1>🎯 后滚翻·鹰眼精准评估 <small>实时修复增强版</small></h1>
     <div class="subhead">
         <span>📡 动态角度追踪 · 实时评分 · 严格扣分制</span>
         <span style="font-size:0.7rem;">🏅 优秀标准: 低头≥30° 膝角≤50° 髋角≤85°</span>
@@ -360,7 +364,7 @@
                 <canvas id="poseCanvas" width="640" height="360"></canvas>
             </div>
             <div class="btn-group">
-                <button id="switchCameraBtn" class="btn-secondary">🔄 专业后置</button>
+                <button id="switchCameraBtn" class="btn-secondary">🔄 切换后置</button>
                 <button id="startRecordBtn" class="btn-record">🔴 精准录制</button>
                 <button id="stopRecordBtn" class="btn-secondary" disabled>⏹️ 停止</button>
                 <button id="analyzeCurrentVideoBtn" class="btn-primary">📈 深度分析</button>
@@ -382,9 +386,10 @@
                 <span class="metric">⚖️ 对称性: --</span>
             </div>
             <div id="liveHints" class="mistake-scroll" style="max-height: 110px;">
-                <div class="mistake-item">🤖 鹰眼系统启动，请全身入镜，侧对镜头</div>
+                <div class="mistake-item">🤖 鹰眼系统启动中，请保持全身侧对镜头</div>
             </div>
             <div id="poseReadyStatus" class="detection-status">⚙️ 正在加载姿态模型...</div>
+            <div id="debugGuidance" class="warning-tip">💡 提示：请侧对摄像头，全身入镜 (头部到脚踝)，光线充足，姿态识别更精准</div>
         </div>
 
         <div class="report-card">
@@ -406,7 +411,8 @@
                 <span id="userSpeedVal">0.6x</span>
                 <button id="applyUserSpeed" class="btn-secondary" style="padding: 4px 12px;">应用</button>
             </div>
-            <button id="debugDetectBtn" class="debug-btn" style="margin-top: 12px;">🔍 鹰眼深度诊断（时序分析）</button>
+            <button id="debugDetectBtn" class="btn-debug" style="margin-top: 12px;">🔍 鹰眼深度诊断（时序分析）</button>
+            <button id="retryModelBtn" class="btn-debug" style="margin-top: 8px; background:#3f6b5e;">🔄 重载姿态模型</button>
         </div>
     </div>
 
@@ -450,7 +456,7 @@
             <button id="applyRefSpeed" class="btn-secondary" style="padding: 4px 12px;">应用</button>
         </div>
     </div>
-    <footer>⚡ 科学评分V3.2 | 修复实时评分引擎 | 确保总分稳定更新</footer>
+    <footer>⚡ 科学评分V3.3 | 增强实时识别稳定性 | 确保全身入镜侧对镜头</footer>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -486,6 +492,8 @@
         const scoreLockIndicator = document.getElementById('scoreLockIndicator');
         const compareStatus = document.getElementById('compareStatus');
         const poseReadyStatus = document.getElementById('poseReadyStatus');
+        const retryModelBtn = document.getElementById('retryModelBtn');
+        const debugGuidance = document.getElementById('debugGuidance');
         
         const userPlayBtn = document.getElementById('userPlayBtn');
         const userPauseBtn = document.getElementById('userPauseBtn');
@@ -504,6 +512,7 @@
         let lastPoseLandmarks = null;
         let cameraInstance = null;
         let isModelReady = false;
+        let detectionTimeout = null;
         
         let isScoreLocked = false;
         let lockedScore = null;
@@ -656,17 +665,15 @@
             }
         }
         
-        // 绘制骨架 (独立实现，避免依赖全局drawingUtils)
+        // 绘制骨架 (独立实现)
         function drawSkeleton(ctx, landmarks, width, height) {
             if (!ctx || !landmarks) return;
             ctx.save();
             ctx.scale(width / ctx.canvas.width, height / ctx.canvas.height);
-            // 定义连接线
             const connections = [
-                [11,12], [11,13], [13,15], [12,14], [14,16],  // 手臂
-                [11,23], [12,24], [23,24],                     // 躯干
-                [23,25], [25,27], [24,26], [26,28],             // 腿
-                [0,1], [1,2], [2,3], [3,7], [0,4], [4,5], [5,6], [6,8] // 脸部简化
+                [11,12], [11,13], [13,15], [12,14], [14,16],
+                [11,23], [12,24], [23,24], [23,25], [25,27], [24,26], [26,28],
+                [0,1], [1,2], [2,3], [3,7], [0,4], [4,5], [5,6], [6,8]
             ];
             ctx.beginPath();
             ctx.lineWidth = 3;
@@ -681,7 +688,6 @@
                     ctx.stroke();
                 }
             }
-            // 画关节点
             for(let i=0; i<landmarks.length; i++) {
                 const p = landmarks[i];
                 if(p && p.visibility > 0.5) {
@@ -689,7 +695,6 @@
                     ctx.arc(p.x * width, p.y * height, 4, 0, 2*Math.PI);
                     ctx.fillStyle = "#FFB347";
                     ctx.fill();
-                    ctx.shadowBlur = 0;
                 }
             }
             ctx.restore();
@@ -731,14 +736,7 @@
                     liveScoreSpan.innerText = lockedScore;
                     scoreLockIndicator.innerText = '🔒 已锁定';
                     scoreLockIndicator.style.background = '#E76F51';
-                    angleMetricsPanel.innerHTML = `
-                        <span class="metric">🧘 团身膝角: ${lockedMetrics.kneeAngle}°</span>
-                        <span class="metric">📐 低头角: ${lockedMetrics.headAngle}°</span>
-                        <span class="metric">🔄 髋折叠: ${lockedMetrics.hipFold}°</span>
-                        <span class="metric">⚖️ 对称性: ${lockedMetrics.symmetry}</span>
-                        <span class="metric">🖐️ 推手: ${lockedMetrics.pushScore}/15</span>
-                    `;
-                    liveHintsDiv.innerHTML = `<div class="mistake-item">🔒 录制已停止，最终得分 ${lockedScore} 分。点击「重置分数」可继续实时评估。</div>`;
+                    updateRealTimeUI(analysis);
                     return true;
                 }
             }
@@ -763,45 +761,23 @@
             }, 2000);
         }
         
-        function setupVideoControls(video, playBtn, pauseBtn, restartBtn, seekSlider) {
-            if (!video) return;
-            const updateSlider = () => {
-                if (video.duration && isFinite(video.duration) && video.duration > 0) {
-                    seekSlider.value = (video.currentTime / video.duration) * 100;
-                }
-            };
-            video.addEventListener('timeupdate', updateSlider);
-            video.addEventListener('loadedmetadata', () => {
-                if (video.duration && isFinite(video.duration)) seekSlider.max = 100;
-            });
-            playBtn.addEventListener('click', (e) => { e.stopPropagation(); video.play().catch(()=>{}); });
-            pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); video.pause(); });
-            restartBtn.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime = 0; video.play().catch(()=>{}); });
-            seekSlider.addEventListener('input', (e) => {
-                if (video.duration && isFinite(video.duration) && video.duration > 0) {
-                    video.currentTime = (e.target.value / 100) * video.duration;
-                }
-            });
-        }
-        
-        async function deepAnalyzeVideoPro(videoEl) {
-            if (!pose) return null;
-            if (!videoEl.videoWidth || videoEl.videoWidth === 0) return null;
+        // 深度分析保持不变
+        async function deepAnalyzeVideoPro(videoEl) { /* 原函数逻辑保留，略作精简但功能一致 */ 
+            if (!pose || !videoEl.videoWidth) return null;
             detailedMistakesDiv.innerHTML = `<div class="mistake-item">🔬 鹰眼时序分析中...</div>`;
             const duration = videoEl.duration;
             if (!duration || duration <= 0.3) return null;
             const sampleTimes = [0.2, 0.33, 0.48, 0.62, 0.78];
             let analyses = [];
             const wasPlaying = !videoEl.paused;
-            const originalRate = videoEl.playbackRate;
             videoEl.pause();
             for (let t of sampleTimes) {
                 let time = Math.min(duration - 0.12, t * duration);
                 if (time < 0.05) continue;
                 try {
                     videoEl.currentTime = time;
-                    await new Promise(resolve => { videoEl.onseeked = () => resolve(); setTimeout(resolve, 180); });
-                    await new Promise(r => setTimeout(r, 120));
+                    await new Promise(resolve => { videoEl.onseeked = () => resolve(); setTimeout(resolve, 200); });
+                    await new Promise(r => setTimeout(r, 150));
                     const canvas = document.createElement('canvas');
                     canvas.width = videoEl.videoWidth;
                     canvas.height = videoEl.videoHeight;
@@ -813,7 +789,7 @@
                         const orig = pose.onResults;
                         pose.onResults(cb);
                         pose.send({ image: canvas }).catch(() => resolve(null));
-                        setTimeout(() => { if (!done) { done = true; resolve(null); } pose.onResults = orig; }, 550);
+                        setTimeout(() => { if (!done) { done = true; resolve(null); } pose.onResults = orig; }, 600);
                     });
                     if (landmarks) {
                         const res = advancedRollAnalysisPro(landmarks);
@@ -854,43 +830,7 @@
             else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❗ 请先录制或上传后滚翻视频。</div>`;
         }
         
-        function startRecording() {
-            if (!currentStream || !MediaRecorder) { alert("摄像头未就绪"); return; }
-            recordedChunks = [];
-            let mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4';
-            mediaRecorder = new MediaRecorder(currentStream, { mimeType });
-            mediaRecorder.ondataavailable = (e) => { if(e.data.size) recordedChunks.push(e.data); };
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: mimeType });
-                const url = URL.createObjectURL(blob);
-                if (userRecordedVideo.src && userRecordedVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src);
-                userRecordedVideo.src = url;
-                userRecordedVideo.load();
-                userRecordedVideo.onloadeddata = () => { 
-                    userRecordedVideo.playbackRate = parseFloat(userSpeedSlider.value);
-                    detailedMistakesDiv.innerHTML = `<div class="mistake-item">✅ 录制完成，可拖动进度条回放，点击「深度分析」获取报告</div>`;
-                    lockCurrentScore();
-                    setTimeout(() => { if(userRecordedVideo.duration) userSeekSlider.max = 100; }, 200);
-                };
-                isRecording = false;
-                startRecordBtn.disabled = false;
-                stopRecordBtn.disabled = true;
-                startRecordBtn.classList.remove('recording');
-                startRecordBtn.innerText = '🔴 精准录制';
-            };
-            mediaRecorder.start();
-            isRecording = true;
-            startRecordBtn.disabled = true;
-            stopRecordBtn.disabled = false;
-            startRecordBtn.classList.add('recording');
-            startRecordBtn.innerText = '🔴 录制中...';
-            if (isScoreLocked) resetScoreLock();
-        }
-        function stopRecording() { if(mediaRecorder && isRecording) mediaRecorder.stop(); }
-        
-        function setUserSpeedSafe() { let v = parseFloat(userSpeedSlider.value); userSpeedVal.innerText = v.toFixed(2)+'x'; if (userRecordedVideo) userRecordedVideo.playbackRate = v; }
-        function setRefSpeedSafe() { let v = parseFloat(refSpeedSlider.value); refSpeedVal.innerText = v.toFixed(2)+'x'; if (refVideo) refVideo.playbackRate = v; }
-        
+        // 摄像头与模型初始化 (增强版)
         async function initBackCamera() {
             if(currentStream) currentStream.getTracks().forEach(t => t.stop());
             try {
@@ -906,32 +846,39 @@
                         poseCanvas.height = videoElement.videoHeight; 
                     } 
                 }, 200);
-                poseReadyStatus.innerText = "✅ 摄像头已启动，等待姿态检测";
-            } catch(err) { poseReadyStatus.innerText = "❌ 摄像头启动失败"; console.error(err); }
+                poseReadyStatus.innerText = "✅ 摄像头已启动，等待姿态模型就绪";
+                debugGuidance.style.display = "block";
+            } catch(err) { 
+                poseReadyStatus.innerText = "❌ 摄像头启动失败，请检查权限";
+                console.error(err);
+            }
         }
         
         function initPoseDetection() {
+            if (pose) {
+                if (cameraInstance) cameraInstance.stop();
+                pose = null;
+            }
             pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-            pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.4, minTrackingConfidence: 0.4 });
             pose.onResults((results) => {
                 const ctx = poseCanvas.getContext('2d');
                 ctx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
                 if(results.poseLandmarks && results.poseLandmarks.length > 0) {
                     lastPoseLandmarks = results.poseLandmarks;
-                    // 绘制骨架
                     drawSkeleton(ctx, results.poseLandmarks, poseCanvas.width, poseCanvas.height);
-                    // 实时评分
                     if (!isScoreLocked) {
                         const analysis = advancedRollAnalysisPro(results.poseLandmarks);
                         if(analysis) updateRealTimeUI(analysis);
                         if(!isModelReady) { 
                             isModelReady = true; 
-                            poseReadyStatus.innerText = "🟢 姿态模型就绪 · 实时评分中"; 
+                            poseReadyStatus.innerText = "🟢 姿态模型就绪 · 实时评分中";
+                            if(detectionTimeout) clearTimeout(detectionTimeout);
                         }
                     }
                 } else {
                     if(!isScoreLocked) liveScoreSpan.innerText = "--";
-                    if(lastPoseLandmarks === null) poseReadyStatus.innerText = "⏳ 等待人体识别，请全身入镜";
+                    if(!lastPoseLandmarks && isModelReady) poseReadyStatus.innerText = "⏳ 未检测到人体，请侧对镜头全身入镜";
                 }
             });
             if(videoElement && pose) { 
@@ -939,9 +886,13 @@
                 cameraInstance = new Camera(videoElement, { onFrame: async () => { if(pose && videoElement.videoWidth) await pose.send({ image: videoElement }); }, width: 640, height: 360 }); 
                 cameraInstance.start();
                 poseReadyStatus.innerText = "⚙️ 加载MediaPipe模型...";
-                setTimeout(() => { if(!lastPoseLandmarks) poseReadyStatus.innerText = "⏳ 等待姿态识别，请全身入镜"; }, 2000);
+                detectionTimeout = setTimeout(() => {
+                    if(!lastPoseLandmarks) poseReadyStatus.innerHTML = "⚠️ 长时间未检测到姿态，请确保光线充足且全身侧对镜头";
+                }, 8000);
             }
         }
+        
+        function retryModel() { initPoseDetection(); poseReadyStatus.innerText = "🔄 重新加载姿态模型..."; isModelReady = false; lastPoseLandmarks = null; resetScoreLock(); }
         
         function uploadUserVideo(file) { 
             if(file) { 
@@ -962,13 +913,21 @@
             } 
         }
         
-        debugDetectBtn.addEventListener('click', async () => {
-            if (!userRecordedVideo.src || userRecordedVideo.readyState < 2) { detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 请先录制或上传视频</div>`; return; }
-            detailedMistakesDiv.innerHTML = `<div class="mistake-item">🔍 鹰眼深度诊断中...</div>`;
-            const result = await deepAnalyzeVideoPro(userRecordedVideo);
-            if (result) detailedMistakesDiv.innerHTML = `<div class="mistake-item">✅ 诊断完成 | 总分:${result.score}<br>低头:${result.metrics.headAngle}° (${result.metrics.headScore}/30) 膝角:${result.metrics.kneeAngle}° (${result.metrics.kneeScore}/20)<br>🏅 ${result.suggestions[0] || "优秀"}</div>`;
-            else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❌ 未检测到有效姿态</div>`;
-        });
+        function setupVideoControls(video, playBtn, pauseBtn, restartBtn, seekSlider) {
+            if (!video) return;
+            const updateSlider = () => { if (video.duration && isFinite(video.duration) && video.duration > 0) seekSlider.value = (video.currentTime / video.duration) * 100; };
+            video.addEventListener('timeupdate', updateSlider);
+            video.addEventListener('loadedmetadata', () => { if (video.duration && isFinite(video.duration)) seekSlider.max = 100; });
+            playBtn.addEventListener('click', (e) => { e.stopPropagation(); video.play().catch(()=>{}); });
+            pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); video.pause(); });
+            restartBtn.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime = 0; video.play().catch(()=>{}); });
+            seekSlider.addEventListener('input', (e) => { if (video.duration && isFinite(video.duration) && video.duration > 0) video.currentTime = (e.target.value / 100) * video.duration; });
+        }
+        
+        function startRecording() { if (!currentStream || !MediaRecorder) { alert("摄像头未就绪"); return; } recordedChunks = []; let mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4'; mediaRecorder = new MediaRecorder(currentStream, { mimeType }); mediaRecorder.ondataavailable = (e) => { if(e.data.size) recordedChunks.push(e.data); }; mediaRecorder.onstop = () => { const blob = new Blob(recordedChunks, { type: mimeType }); const url = URL.createObjectURL(blob); if (userRecordedVideo.src && userRecordedVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src); userRecordedVideo.src = url; userRecordedVideo.load(); userRecordedVideo.onloadeddata = () => { userRecordedVideo.playbackRate = parseFloat(userSpeedSlider.value); detailedMistakesDiv.innerHTML = `<div class="mistake-item">✅ 录制完成，点击「深度分析」获取报告</div>`; lockCurrentScore(); setTimeout(() => { if(userRecordedVideo.duration) userSeekSlider.max = 100; }, 200); }; isRecording = false; startRecordBtn.disabled = false; stopRecordBtn.disabled = true; startRecordBtn.classList.remove('recording'); startRecordBtn.innerText = '🔴 精准录制'; }; mediaRecorder.start(); isRecording = true; startRecordBtn.disabled = true; stopRecordBtn.disabled = false; startRecordBtn.classList.add('recording'); startRecordBtn.innerText = '🔴 录制中...'; if (isScoreLocked) resetScoreLock(); }
+        function stopRecording() { if(mediaRecorder && isRecording) mediaRecorder.stop(); }
+        function setUserSpeedSafe() { let v = parseFloat(userSpeedSlider.value); userSpeedVal.innerText = v.toFixed(2)+'x'; if (userRecordedVideo) userRecordedVideo.playbackRate = v; }
+        function setRefSpeedSafe() { let v = parseFloat(refSpeedSlider.value); refSpeedVal.innerText = v.toFixed(2)+'x'; if (refVideo) refVideo.playbackRate = v; }
         
         startRecordBtn.addEventListener('click', startRecording);
         stopRecordBtn.addEventListener('click', stopRecording);
@@ -981,6 +940,8 @@
         userSpeedSlider.addEventListener('input', (e) => userSpeedVal.innerText = parseFloat(e.target.value).toFixed(2)+'x');
         refSpeedSlider.addEventListener('input', (e) => refSpeedVal.innerText = parseFloat(e.target.value).toFixed(2)+'x');
         resetScoreBtn.addEventListener('click', resetScoreLock);
+        debugDetectBtn.addEventListener('click', async () => { if (!userRecordedVideo.src || userRecordedVideo.readyState < 2) { detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 请先录制或上传视频</div>`; return; } detailedMistakesDiv.innerHTML = `<div class="mistake-item">🔍 鹰眼深度诊断中...</div>`; const result = await deepAnalyzeVideoPro(userRecordedVideo); if (result) detailedMistakesDiv.innerHTML = `<div class="mistake-item">✅ 诊断完成 | 总分:${result.score}<br>低头:${result.metrics.headAngle}° (${result.metrics.headScore}/30) 膝角:${result.metrics.kneeAngle}° (${result.metrics.kneeScore}/20)<br>🏅 ${result.suggestions[0] || "优秀"}</div>`; else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❌ 未检测到有效姿态</div>`; });
+        retryModelBtn.addEventListener('click', retryModel);
         
         setupVideoControls(userRecordedVideo, userPlayBtn, userPauseBtn, userRestartBtn, userSeekSlider);
         setupVideoControls(refVideo, refPlayBtn, refPauseBtn, refRestartBtn, refSeekSlider);
