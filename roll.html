@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>后滚翻Pro · iPad稳定增强版 | 实时姿态评分</title>
+    <title>后滚翻Pro · iPad最终修复版 | 实时姿态评分</title>
     <style>
         * {
             margin: 0;
@@ -351,7 +351,7 @@
 </head>
 <body>
 <div class="glass-container">
-    <h1>🎯 后滚翻·鹰眼精准评估 <small>iPad稳定增强版</small></h1>
+    <h1>🎯 后滚翻·鹰眼精准评估 <small>iPad最终修复版</small></h1>
     <div class="subhead">
         <span>📡 动态角度追踪 · 实时评分 · 严格扣分制</span>
         <span style="font-size:0.7rem;">🏅 优秀标准: 低头≥30° 膝角≤50° 髋角≤85°</span>
@@ -456,7 +456,7 @@
             <button id="applyRefSpeed" class="btn-secondary" style="padding: 4px 12px;">应用</button>
         </div>
     </div>
-    <footer>⚡ 科学评分V3.3 | iPad专用优化版 | 确保全身入镜侧对镜头</footer>
+    <footer>⚡ 科学评分V3.4 | iPad专用修复版 | 确保全身入镜侧对镜头</footer>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -508,6 +508,7 @@
         let lastPoseLandmarks = null;
         let isModelReady = false;
         let animationFrameId = null;
+        let isDeepAnalyzing = false;  // 防止深度分析时干扰实时
         
         let isScoreLocked = false;
         let lockedScore = null;
@@ -660,7 +661,7 @@
             }
         }
         
-        // 绘制骨架 (独立实现)
+        // 绘制骨架
         function drawSkeleton(ctx, landmarks, width, height) {
             if (!ctx || !landmarks) return;
             ctx.save();
@@ -756,7 +757,7 @@
             }, 2000);
         }
         
-        // 深度分析（时序采样）
+        // 深度分析（时序采样），不干扰实时帧循环
         async function deepAnalyzeVideoPro(videoEl) {
             if (!pose || !videoEl.videoWidth) return null;
             detailedMistakesDiv.innerHTML = `<div class="mistake-item">🔬 鹰眼时序分析中...</div>`;
@@ -766,6 +767,11 @@
             let analyses = [];
             const wasPlaying = !videoEl.paused;
             videoEl.pause();
+            // 暂停实时帧循环，避免干扰
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
             for (let t of sampleTimes) {
                 let time = Math.min(duration - 0.12, t * duration);
                 if (time < 0.05) continue;
@@ -792,7 +798,35 @@
                     }
                 } catch(e) {}
             }
+            // 恢复原始回调
+            if (pose) {
+                pose.onResults((results) => {
+                    const ctx = poseCanvas.getContext('2d');
+                    ctx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
+                    if(results.poseLandmarks && results.poseLandmarks.length > 0) {
+                        lastPoseLandmarks = results.poseLandmarks;
+                        drawSkeleton(ctx, results.poseLandmarks, poseCanvas.width, poseCanvas.height);
+                        if (!isScoreLocked && !isDeepAnalyzing) {
+                            const analysis = advancedRollAnalysisPro(results.poseLandmarks);
+                            if(analysis) updateRealTimeUI(analysis);
+                            if(!isModelReady) { 
+                                isModelReady = true; 
+                                poseReadyStatus.innerText = "🟢 姿态模型就绪 · 实时评分中";
+                            }
+                        }
+                    } else {
+                        if(!isScoreLocked && !isDeepAnalyzing) liveScoreSpan.innerText = "--";
+                        if(isModelReady && !lastPoseLandmarks && !isDeepAnalyzing) {
+                            poseReadyStatus.innerText = "⏳ 未检测到人体，请全身侧对镜头";
+                        }
+                    }
+                });
+            }
             if (wasPlaying) videoEl.play().catch(e=>{});
+            // 重新启动帧循环
+            if (videoElement.srcObject && isModelReady && !animationFrameId) {
+                startFrameLoop();
+            }
             if (analyses.length === 0) return null;
             let totalScore = 0;
             analyses.forEach(a => totalScore += a.score);
@@ -803,7 +837,9 @@
         }
         
         async function analyzeAndDisplayPrecise(videoEl) {
+            isDeepAnalyzing = true;
             const result = await deepAnalyzeVideoPro(videoEl);
+            isDeepAnalyzing = false;
             if (result) {
                 let html = `<div class="mistake-item"><span class="badge ${result.score >= 85 ? 'badge-success' : ''}">🎯 综合得分 ${result.score}</span> 严格扣分制评分</div>`;
                 html += `<div class="mistake-item">📊 低头:${result.metrics.headAngle}° (${result.metrics.headScore}/30) | 膝角:${result.metrics.kneeAngle}° (${result.metrics.kneeScore}/20) | 髋角:${result.metrics.hipFold}° (${result.metrics.hipScore}/15)</div>`;
@@ -830,7 +866,6 @@
             if(currentStream) currentStream.getTracks().forEach(t => t.stop());
             if(animationFrameId) cancelAnimationFrame(animationFrameId);
             try {
-                // 强制低分辨率约束，确保iPad性能
                 const constraints = {
                     video: {
                         facingMode: "environment",
@@ -840,11 +875,9 @@
                     },
                     audio: false
                 };
-                // 尝试获取后置摄像头，但约束中facingMode: "environment" 会优先后置
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 videoElement.srcObject = currentStream;
                 await videoElement.play();
-                // 调整canvas尺寸匹配视频
                 const resizeCanvas = () => {
                     if(videoElement.videoWidth && videoElement.videoHeight) {
                         poseCanvas.width = videoElement.videoWidth;
@@ -855,7 +888,6 @@
                 resizeCanvas();
                 poseReadyStatus.innerText = "✅ 摄像头已启动，等待姿态模型就绪";
                 debugGuidance.style.display = "block";
-                // 启动自定义帧循环 (比Camera utils更稳定)
                 if(pose && isModelReady) startFrameLoop();
             } catch(err) { 
                 poseReadyStatus.innerText = "❌ 摄像头启动失败，请检查权限";
@@ -863,14 +895,10 @@
             }
         }
         
-        // 切换摄像头 (支持前后)
         async function switchCamera() {
             if(currentStream) currentStream.getTracks().forEach(t => t.stop());
             try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(d => d.kind === 'videoinput');
                 let newFacing = "environment";
-                // 简单翻转逻辑：如果当前流是后置，则切前置
                 if(currentStream) {
                     const currentTrack = currentStream.getVideoTracks()[0];
                     if(currentTrack && currentTrack.label.toLowerCase().includes('back')) newFacing = "user";
@@ -891,11 +919,10 @@
             }
         }
         
-        // 自定义帧循环 (替代Camera utils)
         function startFrameLoop() {
             if(animationFrameId) cancelAnimationFrame(animationFrameId);
             const processFrame = async () => {
-                if(!pose || !videoElement.videoWidth || !isModelReady) {
+                if(!pose || !videoElement.videoWidth || !isModelReady || isDeepAnalyzing) {
                     animationFrameId = requestAnimationFrame(processFrame);
                     return;
                 }
@@ -915,12 +942,12 @@
                 pose = null;
             }
             pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-            // iPad性能优化：使用轻量级模型 modelComplexity: 0
+            // 提高检测灵敏度
             pose.setOptions({ 
                 modelComplexity: 0, 
                 smoothLandmarks: true, 
-                minDetectionConfidence: 0.5, 
-                minTrackingConfidence: 0.5 
+                minDetectionConfidence: 0.3, 
+                minTrackingConfidence: 0.3 
             });
             pose.onResults((results) => {
                 const ctx = poseCanvas.getContext('2d');
@@ -928,7 +955,7 @@
                 if(results.poseLandmarks && results.poseLandmarks.length > 0) {
                     lastPoseLandmarks = results.poseLandmarks;
                     drawSkeleton(ctx, results.poseLandmarks, poseCanvas.width, poseCanvas.height);
-                    if (!isScoreLocked) {
+                    if (!isScoreLocked && !isDeepAnalyzing) {
                         const analysis = advancedRollAnalysisPro(results.poseLandmarks);
                         if(analysis) updateRealTimeUI(analysis);
                         if(!isModelReady) { 
@@ -937,13 +964,12 @@
                         }
                     }
                 } else {
-                    if(!isScoreLocked) liveScoreSpan.innerText = "--";
-                    if(isModelReady && !lastPoseLandmarks) {
+                    if(!isScoreLocked && !isDeepAnalyzing) liveScoreSpan.innerText = "--";
+                    if(isModelReady && !lastPoseLandmarks && !isDeepAnalyzing) {
                         poseReadyStatus.innerText = "⏳ 未检测到人体，请全身侧对镜头";
                     }
                 }
             });
-            // 加载模型，完成后启动循环
             pose.initialize().then(() => {
                 console.log("MediaPipe Pose 模型加载完成");
                 isModelReady = true;
