@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>后滚翻Pro · 鹰眼稳定增强版 | 实时识别修复</title>
+    <title>后滚翻Pro · iPad稳定增强版 | 实时姿态评分</title>
     <style>
         * {
             margin: 0;
@@ -351,7 +351,7 @@
 </head>
 <body>
 <div class="glass-container">
-    <h1>🎯 后滚翻·鹰眼精准评估 <small>实时修复增强版</small></h1>
+    <h1>🎯 后滚翻·鹰眼精准评估 <small>iPad稳定增强版</small></h1>
     <div class="subhead">
         <span>📡 动态角度追踪 · 实时评分 · 严格扣分制</span>
         <span style="font-size:0.7rem;">🏅 优秀标准: 低头≥30° 膝角≤50° 髋角≤85°</span>
@@ -456,14 +456,10 @@
             <button id="applyRefSpeed" class="btn-secondary" style="padding: 4px 12px;">应用</button>
         </div>
     </div>
-    <footer>⚡ 科学评分V3.3 | 增强实时识别稳定性 | 确保全身入镜侧对镜头</footer>
+    <footer>⚡ 科学评分V3.3 | iPad专用优化版 | 确保全身入镜侧对镜头</footer>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-
 <script>
     (function(){
         // DOM 元素
@@ -510,9 +506,8 @@
         let currentStream = null;
         let pose = null;
         let lastPoseLandmarks = null;
-        let cameraInstance = null;
         let isModelReady = false;
-        let detectionTimeout = null;
+        let animationFrameId = null;
         
         let isScoreLocked = false;
         let lockedScore = null;
@@ -761,8 +756,8 @@
             }, 2000);
         }
         
-        // 深度分析保持不变
-        async function deepAnalyzeVideoPro(videoEl) { /* 原函数逻辑保留，略作精简但功能一致 */ 
+        // 深度分析（时序采样）
+        async function deepAnalyzeVideoPro(videoEl) {
             if (!pose || !videoEl.videoWidth) return null;
             detailedMistakesDiv.innerHTML = `<div class="mistake-item">🔬 鹰眼时序分析中...</div>`;
             const duration = videoEl.duration;
@@ -830,37 +825,103 @@
             else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❗ 请先录制或上传后滚翻视频。</div>`;
         }
         
-        // 摄像头与模型初始化 (增强版)
+        // -------- 摄像头初始化 (针对iPad优化) ----------
         async function initBackCamera() {
             if(currentStream) currentStream.getTracks().forEach(t => t.stop());
+            if(animationFrameId) cancelAnimationFrame(animationFrameId);
             try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const back = devices.find(d => d.kind === 'videoinput' && (d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear')));
-                const constraints = { video: back ? { deviceId: { exact: back.deviceId } } : { facingMode: "environment" }, audio: false };
+                // 强制低分辨率约束，确保iPad性能
+                const constraints = {
+                    video: {
+                        facingMode: "environment",
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 30 }
+                    },
+                    audio: false
+                };
+                // 尝试获取后置摄像头，但约束中facingMode: "environment" 会优先后置
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 videoElement.srcObject = currentStream;
                 await videoElement.play();
-                setTimeout(() => { 
-                    if(poseCanvas.width !== videoElement.videoWidth && videoElement.videoWidth) { 
-                        poseCanvas.width = videoElement.videoWidth; 
-                        poseCanvas.height = videoElement.videoHeight; 
-                    } 
-                }, 200);
+                // 调整canvas尺寸匹配视频
+                const resizeCanvas = () => {
+                    if(videoElement.videoWidth && videoElement.videoHeight) {
+                        poseCanvas.width = videoElement.videoWidth;
+                        poseCanvas.height = videoElement.videoHeight;
+                    }
+                };
+                videoElement.addEventListener('loadedmetadata', resizeCanvas);
+                resizeCanvas();
                 poseReadyStatus.innerText = "✅ 摄像头已启动，等待姿态模型就绪";
                 debugGuidance.style.display = "block";
+                // 启动自定义帧循环 (比Camera utils更稳定)
+                if(pose && isModelReady) startFrameLoop();
             } catch(err) { 
                 poseReadyStatus.innerText = "❌ 摄像头启动失败，请检查权限";
                 console.error(err);
             }
         }
         
+        // 切换摄像头 (支持前后)
+        async function switchCamera() {
+            if(currentStream) currentStream.getTracks().forEach(t => t.stop());
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                let newFacing = "environment";
+                // 简单翻转逻辑：如果当前流是后置，则切前置
+                if(currentStream) {
+                    const currentTrack = currentStream.getVideoTracks()[0];
+                    if(currentTrack && currentTrack.label.toLowerCase().includes('back')) newFacing = "user";
+                    else newFacing = "environment";
+                }
+                const constraints = {
+                    video: { facingMode: newFacing, width: { ideal: 640 }, height: { ideal: 480 } },
+                    audio: false
+                };
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = currentStream;
+                await videoElement.play();
+                poseReadyStatus.innerText = `🔄 已切换${newFacing === 'environment' ? '后置' : '前置'}摄像头`;
+                if(pose && isModelReady) startFrameLoop();
+            } catch(e) {
+                poseReadyStatus.innerText = "切换失败，请手动授权";
+                console.error(e);
+            }
+        }
+        
+        // 自定义帧循环 (替代Camera utils)
+        function startFrameLoop() {
+            if(animationFrameId) cancelAnimationFrame(animationFrameId);
+            const processFrame = async () => {
+                if(!pose || !videoElement.videoWidth || !isModelReady) {
+                    animationFrameId = requestAnimationFrame(processFrame);
+                    return;
+                }
+                try {
+                    await pose.send({ image: videoElement });
+                } catch(e) {
+                    // 静默失败
+                }
+                animationFrameId = requestAnimationFrame(processFrame);
+            };
+            animationFrameId = requestAnimationFrame(processFrame);
+        }
+        
         function initPoseDetection() {
             if (pose) {
-                if (cameraInstance) cameraInstance.stop();
+                if(animationFrameId) cancelAnimationFrame(animationFrameId);
                 pose = null;
             }
             pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-            pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.4, minTrackingConfidence: 0.4 });
+            // iPad性能优化：使用轻量级模型 modelComplexity: 0
+            pose.setOptions({ 
+                modelComplexity: 0, 
+                smoothLandmarks: true, 
+                minDetectionConfidence: 0.5, 
+                minTrackingConfidence: 0.5 
+            });
             pose.onResults((results) => {
                 const ctx = poseCanvas.getContext('2d');
                 ctx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
@@ -873,26 +934,35 @@
                         if(!isModelReady) { 
                             isModelReady = true; 
                             poseReadyStatus.innerText = "🟢 姿态模型就绪 · 实时评分中";
-                            if(detectionTimeout) clearTimeout(detectionTimeout);
                         }
                     }
                 } else {
                     if(!isScoreLocked) liveScoreSpan.innerText = "--";
-                    if(!lastPoseLandmarks && isModelReady) poseReadyStatus.innerText = "⏳ 未检测到人体，请侧对镜头全身入镜";
+                    if(isModelReady && !lastPoseLandmarks) {
+                        poseReadyStatus.innerText = "⏳ 未检测到人体，请全身侧对镜头";
+                    }
                 }
             });
-            if(videoElement && pose) { 
-                if(cameraInstance) cameraInstance.stop(); 
-                cameraInstance = new Camera(videoElement, { onFrame: async () => { if(pose && videoElement.videoWidth) await pose.send({ image: videoElement }); }, width: 640, height: 360 }); 
-                cameraInstance.start();
-                poseReadyStatus.innerText = "⚙️ 加载MediaPipe模型...";
-                detectionTimeout = setTimeout(() => {
-                    if(!lastPoseLandmarks) poseReadyStatus.innerHTML = "⚠️ 长时间未检测到姿态，请确保光线充足且全身侧对镜头";
-                }, 8000);
-            }
+            // 加载模型，完成后启动循环
+            pose.initialize().then(() => {
+                console.log("MediaPipe Pose 模型加载完成");
+                isModelReady = true;
+                poseReadyStatus.innerText = "🟢 模型已加载，开始识别";
+                if(videoElement.srcObject) startFrameLoop();
+            }).catch(err => {
+                console.error("模型加载失败", err);
+                poseReadyStatus.innerText = "❌ 模型加载失败，请刷新页面重试";
+            });
         }
         
-        function retryModel() { initPoseDetection(); poseReadyStatus.innerText = "🔄 重新加载姿态模型..."; isModelReady = false; lastPoseLandmarks = null; resetScoreLock(); }
+        function retryModel() { 
+            if(animationFrameId) cancelAnimationFrame(animationFrameId);
+            initPoseDetection(); 
+            poseReadyStatus.innerText = "🔄 重新加载姿态模型..."; 
+            isModelReady = false; 
+            lastPoseLandmarks = null; 
+            resetScoreLock(); 
+        }
         
         function uploadUserVideo(file) { 
             if(file) { 
@@ -932,7 +1002,7 @@
         startRecordBtn.addEventListener('click', startRecording);
         stopRecordBtn.addEventListener('click', stopRecording);
         analyzeCurrentVideoBtn.addEventListener('click', analyzeCurrentVideo);
-        switchCameraBtn.addEventListener('click', () => initBackCamera());
+        switchCameraBtn.addEventListener('click', switchCamera);
         uploadVideoInput.addEventListener('change', (e) => { if(e.target.files[0]) uploadUserVideo(e.target.files[0]); });
         uploadRefVideoInput.addEventListener('change', (e) => { if(e.target.files[0]) uploadStandardVideo(e.target.files[0]); });
         applyUserSpeed.addEventListener('click', setUserSpeedSafe);
@@ -946,7 +1016,12 @@
         setupVideoControls(userRecordedVideo, userPlayBtn, userPauseBtn, userRestartBtn, userSeekSlider);
         setupVideoControls(refVideo, refPlayBtn, refPauseBtn, refRestartBtn, refSeekSlider);
         
-        (async () => { await initBackCamera(); initPoseDetection(); setUserSpeedSafe(); setRefSpeedSafe(); })();
+        (async () => { 
+            await initBackCamera(); 
+            initPoseDetection(); 
+            setUserSpeedSafe(); 
+            setRefSpeedSafe(); 
+        })();
     })();
 </script>
 </body>
