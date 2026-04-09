@@ -11,14 +11,12 @@
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
         }
-
         body {
             background: radial-gradient(circle at 20% 30%, #0a1f1c, #030c0b);
             font-family: 'Segoe UI', 'Poppins', system-ui, -apple-system, 'SF Pro Text', 'HarmonyOS Sans', sans-serif;
             padding: 20px;
             min-height: 100vh;
         }
-
         .glass-container {
             max-width: 1500px;
             margin: 0 auto;
@@ -29,7 +27,6 @@
             padding: 1.6rem;
             border: 1px solid rgba(100, 180, 160, 0.5);
         }
-
         h1 {
             font-size: 1.9rem;
             font-weight: 800;
@@ -62,7 +59,6 @@
             flex-wrap: wrap;
             align-items: center;
         }
-
         .dashboard {
             display: flex;
             flex-wrap: wrap;
@@ -88,7 +84,6 @@
             display: flex;
             flex-direction: column;
         }
-
         .video-stage {
             position: relative;
             background: #000;
@@ -110,7 +105,6 @@
             left: 0;
             pointer-events: none;
         }
-
         .btn-group {
             display: flex;
             flex-wrap: wrap;
@@ -141,7 +135,6 @@
         .btn-reset { background: #5e6b5e; color: #FFE6B0; }
         .btn-retry { background: #F4A261; color: #1f2e2a; border: 1px solid #ffd966; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; box-shadow: 0 0 0 3px #ffb485; } }
-
         .score-badge {
             display: flex;
             justify-content: space-between;
@@ -180,13 +173,12 @@
             border-radius: 20px;
             padding: 4px 12px;
             color: #FDF4DC;
-            font-weight: 500;
+            font-weight: 50;
         }
         .metric-excellent {
             background: #E9C46A;
             color: #1f2e2a;
         }
-
         .mistake-scroll {
             background: #0a2a25;
             border-radius: 1.2rem;
@@ -214,7 +206,6 @@
         .badge-success {
             background: #2a9d8f;
         }
-
         .comparison-area {
             background: #0e2f2ac9;
             border-radius: 1.8rem;
@@ -351,7 +342,6 @@
         <span>📡 动态角度追踪 · 智能平滑评分 · 鸿蒙高性能适配</span>
         <span style="font-size:0.7rem;">🏅 严格扣分制 | 优秀标准: 低头≥30° 膝角≤50° 髋角≤85°</span>
     </div>
-
     <div class="dashboard">
         <div class="live-card">
             <div class="video-stage">
@@ -386,7 +376,6 @@
                 <div class="mistake-item">🤖 鹰眼系统已优化，实时评分更流畅</div>
             </div>
         </div>
-
         <div class="report-card">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
                 <span style="font-weight: bold; font-size: 1.2rem;">📋 精准诊断报告</span>
@@ -409,7 +398,6 @@
             <button id="debugDetectBtn" class="debug-btn" style="margin-top: 12px;">🔍 鹰眼深度诊断（时序分析）</button>
         </div>
     </div>
-
     <div class="comparison-area">
         <div style="display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center;">
             <span>🎬 冠军模型对比</span>
@@ -452,14 +440,11 @@
     </div>
     <footer>⚡ 极速引擎 | 帧间缓存+节流渲染 | 评分响应零延迟</footer>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-
 <script>
-    // DOM 元素
     const videoElement = document.getElementById('inputVideo');
     const poseCanvas = document.getElementById('poseCanvas');
     const startRecordBtn = document.getElementById('startRecordBtn');
@@ -495,21 +480,19 @@
     const refRestartBtn = document.getElementById('refRestartBtn');
     const refSeekSlider = document.getElementById('refSeekSlider');
 
-    // ---------- 全局性能优化变量 ----------
     let mediaRecorder = null;
     let recordedChunks = [];
     let isRecording = false;
     let currentStream = null;
     let pose = null;
-    let isProcessingFrame = false;       // 防止推理堆积
-    let lastValidAnalysis = null;         // 缓存上一帧有效分析结果，防止评分闪烁
+    let isProcessingFrame = false;
+    let lastValidAnalysis = null;
     let frameRequestId = null;
     let isFrameLoopActive = false;
     let isScoreLocked = false;
     let lastUITimestamp = 0;
-    const UI_UPDATE_INTERVAL_MS = 80;     // 约12fps UI更新，平衡流畅与性能
+    const UI_UPDATE_INTERVAL_MS = 80;
 
-    // ---------- 核心角度计算函数 (精简优化) ----------
     function calculateAngle(a, b, c) {
         const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
         let angle = Math.abs(radians * 180.0 / Math.PI);
@@ -615,8 +598,7 @@
             }
         };
     }
-    
-    // 节流UI更新 (保证流畅不卡顿)
+
     function throttledUpdateUI(analysis, now) {
         if (!analysis || isScoreLocked) return false;
         if (now - lastUITimestamp >= UI_UPDATE_INTERVAL_MS) {
@@ -646,7 +628,7 @@
             liveHintsDiv.innerHTML = `<div class="mistake-item">🔒 录制已停止，最终得分 ${lastValidAnalysis.score} 分。点击「重置分数」可继续实时评估。</div>`;
         }
     }
-    
+
     function resetScoreLock() {
         isScoreLocked = false;
         scoreLockIndicator.innerText = '🔓 实时';
@@ -655,7 +637,6 @@
         else liveScoreSpan.innerText = '--';
     }
 
-    // ---------- 摄像头与帧循环 (异步非阻塞，防止积压) ----------
     async function initCameraStream(preferBack = true) {
         if (currentStream) currentStream.getTracks().forEach(track => track.stop());
         cameraErrorMsgDiv.style.display = 'none';
@@ -693,7 +674,7 @@
     }
 
     function stopFrameLoop() { if (frameRequestId) cancelAnimationFrame(frameRequestId); isFrameLoopActive = false; isProcessingFrame = false; }
-    
+
     function startFrameLoop() {
         if (frameRequestId) stopFrameLoop();
         if (!pose || !videoElement.srcObject) return;
@@ -702,9 +683,7 @@
             if (!isFrameLoopActive) return;
             if (pose && videoElement.videoWidth && videoElement.videoHeight && videoElement.readyState >= 2 && !isProcessingFrame) {
                 isProcessingFrame = true;
-                try {
-                    await pose.send({ image: videoElement });
-                } catch(e) { /* 静默 */ }
+                try { await pose.send({ image: videoElement }); } catch(e) {}
                 isProcessingFrame = false;
             }
             frameRequestId = requestAnimationFrame(processFrame);
@@ -717,86 +696,92 @@
         if (success && pose) { stopFrameLoop(); startFrameLoop(); }
         return success;
     }
+
     async function switchCamera() { const mode = currentStream?.getVideoTracks()[0]?.getSettings().facingMode !== 'environment'; await setupCameraAndDetection(mode); }
     function retryCamera() { setupCameraAndDetection(true); }
 
-    // ---------- MediaPipe 初始化，结果回调中更新分析并节流UI ----------
     function initPoseDetection() {
         pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        pose.setOptions({ 
+            modelComplexity: 2, 
+            smoothLandmarks: true, 
+            minDetectionConfidence: 0.65, 
+            minTrackingConfidence: 0.65,
+            smoothSegmentation: true
+        });
         pose.onResults((results) => {
             const ctx = poseCanvas.getContext('2d');
             ctx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
             if(results.poseLandmarks) {
-                // 绘制骨骼 (轻量)
                 if(window.drawingUtils) {
-                    window.drawingUtils.drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS || [[0,1]], { color: "#37F5D0", lineWidth: 2 });
+                    window.drawingUtils.drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS, { color: "#37F5D0", lineWidth: 2 });
                     window.drawingUtils.drawLandmarks(ctx, results.poseLandmarks, { color: "#FFB347", radius: 1.8 });
                 }
                 const analysis = advancedRollAnalysisPro(results.poseLandmarks);
                 if (analysis) {
-                    lastValidAnalysis = analysis;  // 缓存有效分析
-                    if (!isScoreLocked) {
-                        const now = performance.now();
-                        throttledUpdateUI(analysis, now);
-                    }
+                    lastValidAnalysis = analysis;
+                    if (!isScoreLocked) throttledUpdateUI(analysis, performance.now());
                 }
             } else {
-                // 无检测时，不清空分数，沿用上次有效分析，避免闪烁
-                if (!isScoreLocked && lastValidAnalysis) {
-                    const now = performance.now();
-                    throttledUpdateUI(lastValidAnalysis, now);
-                } else if (!isScoreLocked && !lastValidAnalysis) {
-                    liveScoreSpan.innerText = "--";
-                }
+                if (!isScoreLocked && lastValidAnalysis) throttledUpdateUI(lastValidAnalysis, performance.now());
+                else if (!isScoreLocked && !lastValidAnalysis) liveScoreSpan.innerText = "--";
             }
         });
     }
 
-    // ---------- 深度分析 (复用) 略作优化 ----------
     async function deepAnalyzeVideoPro(videoEl) {
-        if (!videoEl || !videoEl.videoWidth) return null;
+        if (!videoEl || !videoEl.videoWidth || videoEl.readyState < 2) return null;
         const duration = videoEl.duration;
-        if (!duration || duration <= 0.3) return null;
-        const sampleTimes = [0.2, 0.32, 0.48, 0.62, 0.78];
+        if (!duration || duration <= 0.1) return null;
+
+        const sampleTimes = [0.3, 0.4, 0.5, 0.6];
         let analyses = [];
         const wasPlaying = !videoEl.paused;
         videoEl.pause();
+
         const tempPose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-        tempPose.setOptions({ modelComplexity: 1, smoothLandmarks: true });
-        await new Promise(resolve => tempPose.initialize().then(resolve).catch(()=>resolve()));
+        tempPose.setOptions({
+            modelComplexity: 2,
+            smoothLandmarks: false,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+        await tempPose.initialize();
+
         for (let t of sampleTimes) {
-            let time = Math.min(duration - 0.12, t * duration);
-            if (time < 0.05) continue;
             try {
-                videoEl.currentTime = time;
-                await new Promise(resolve => { videoEl.onseeked = () => resolve(); setTimeout(resolve, 120); });
-                await new Promise(r => setTimeout(r, 80));
+                const seekTime = Math.min(duration - 0.1, t * duration);
+                videoEl.currentTime = seekTime;
+                await new Promise(r => videoEl.onseeked = r);
+                await new Promise(r => setTimeout(r, 100));
+
                 const canvas = document.createElement('canvas');
-                canvas.width = videoEl.videoWidth;
-                canvas.height = videoEl.videoHeight;
+                canvas.width = videoEl.videoWidth || 640;
+                canvas.height = videoEl.videoHeight || 360;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                const result = await new Promise((resolve) => {
-                    tempPose.onResults((res) => resolve(res.poseLandmarks));
+
+                const landmarks = await new Promise((resolve) => {
+                    tempPose.onResults(res => resolve(res.poseLandmarks));
                     tempPose.send({ image: canvas }).catch(() => resolve(null));
-                    setTimeout(() => resolve(null), 450);
+                    setTimeout(() => resolve(null), 500);
                 });
-                if (result) {
-                    const res = advancedRollAnalysisPro(result);
+
+                if (landmarks) {
+                    const res = advancedRollAnalysisPro(landmarks);
                     if (res) analyses.push(res);
                 }
-            } catch(e) {}
+            } catch (e) {}
         }
+
         tempPose.close();
-        if (wasPlaying) videoEl.play().catch(e=>{});
-        if (analyses.length === 0) return null;
-        let totalScore = 0;
-        analyses.forEach(a => totalScore += a.score);
-        let finalScore = Math.floor(totalScore / analyses.length);
-        const bestAnalysis = analyses.reduce((a,b) => (a.score > b.score ? a : b), analyses[0]);
-        bestAnalysis.score = finalScore;
-        return bestAnalysis;
+        if (wasPlaying) videoEl.play().catch(()=>{});
+        if (analyses.length === 0) return lastValidAnalysis || null;
+
+        const total = analyses.reduce((s, a) => s + a.score, 0);
+        const best = analyses.reduce((a, b) => a.score > b.score ? a : b, analyses[0]);
+        best.score = Math.floor(total / analyses.length);
+        return best;
     }
 
     async function analyzeAndDisplayPrecise(videoEl) {
@@ -812,14 +797,16 @@
             html += `<div class="mistake-item">💡 优化建议：${result.suggestions[0] || "继续保持"}</div>`;
             detailedMistakesDiv.innerHTML = html;
             compareStatus.innerHTML = `✅ 得分: ${result.score}分`;
-        } else detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 检测失败: 请确保全身入镜，光线充足</div>`;
+        } else {
+            detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 未检测到姿态 | 请确保全身入镜、光线充足</div>`;
+        }
     }
+
     function analyzeCurrentVideo() {
         if (userRecordedVideo.src && userRecordedVideo.readyState >= 2) analyzeAndDisplayPrecise(userRecordedVideo);
         else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❗ 请先录制或上传后滚翻视频。</div>`;
     }
 
-    // ---------- 录制与辅助功能 ----------
     function startRecording() {
         if (!currentStream || !MediaRecorder) { alert("摄像头未就绪"); return; }
         recordedChunks = [];
@@ -835,7 +822,7 @@
             userRecordedVideo.onloadeddata = () => { 
                 userRecordedVideo.playbackRate = parseFloat(userSpeedSlider.value);
                 lockCurrentScore();
-                if(userRecordedVideo.duration && isFinite(userRecordedVideo.duration)) userSeekSlider.max = 100;
+                if(userRecordedVideo.duration) userSeekSlider.max = 100;
             };
             isRecording = false;
             startRecordBtn.disabled = false;
@@ -851,13 +838,15 @@
         startRecordBtn.innerText = '🔴 录制中...';
         if (isScoreLocked) resetScoreLock();
     }
+
     function stopRecording() { if(mediaRecorder && isRecording) mediaRecorder.stop(); }
-    
+
     function setUserSpeedSafe() { let v = parseFloat(userSpeedSlider.value); userSpeedVal.innerText = v.toFixed(2)+'x'; if (userRecordedVideo) userRecordedVideo.playbackRate = v; }
     function setRefSpeedSafe() { let v = parseFloat(refSpeedSlider.value); refSpeedVal.innerText = v.toFixed(2)+'x'; if (refVideo) refVideo.playbackRate = v; }
+
     function uploadUserVideo(file) { 
         if(file) { 
-            if(isScoreLocked) resetScoreLock(); 
+            resetScoreLock(); 
             const url = URL.createObjectURL(file); 
             if(userRecordedVideo.src && userRecordedVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src);
             userRecordedVideo.src = url; 
@@ -865,28 +854,28 @@
             userRecordedVideo.onloadeddata = () => analyzeAndDisplayPrecise(userRecordedVideo);
         } 
     }
+
     function uploadStandardVideo(file) { 
         if(file) { 
             const url = URL.createObjectURL(file); 
-            if(refVideo.src && refVideo.src.startsWith('blob:')) URL.revokeObjectURL(refVideo.src);
+            if(refVideo.src && refVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src);
             refVideo.src = url; 
             refVideo.load();
             refVideo.onloadeddata = () => { compareStatus.innerHTML = "✅ 金牌示范已加载"; refVideo.playbackRate = parseFloat(refSpeedSlider.value); };
         } 
     }
-    
+
     function setupVideoControls(video, playBtn, pauseBtn, restartBtn, seekSlider) {
         if (!video) return;
-        const updateSlider = () => { if (video.duration && isFinite(video.duration) && video.duration > 0) seekSlider.value = (video.currentTime / video.duration) * 100; };
+        const updateSlider = () => { if (video.duration > 0) seekSlider.value = (video.currentTime / video.duration) * 100; };
         video.addEventListener('timeupdate', updateSlider);
-        video.addEventListener('loadedmetadata', () => { if (video.duration && isFinite(video.duration)) { seekSlider.max = 100; seekSlider.value = 0; } });
+        video.addEventListener('loadedmetadata', () => { if (video.duration) { seekSlider.max = 100; seekSlider.value = 0; } });
         playBtn.addEventListener('click', (e) => { e.stopPropagation(); video.play().catch(()=>{}); });
         pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); video.pause(); });
         restartBtn.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime = 0; video.play().catch(()=>{}); });
-        seekSlider.addEventListener('input', (e) => { if (video.duration && isFinite(video.duration) && video.duration > 0) video.currentTime = (e.target.value / 100) * video.duration; });
+        seekSlider.addEventListener('input', (e) => { if (video.duration > 0) video.currentTime = (e.target.value / 100) * video.duration; });
     }
-    
-    // 事件绑定
+
     startRecordBtn.addEventListener('click', startRecording);
     stopRecordBtn.addEventListener('click', stopRecording);
     analyzeCurrentVideoBtn.addEventListener('click', analyzeCurrentVideo);
@@ -906,17 +895,16 @@
         if (result) detailedMistakesDiv.innerHTML = `<div class="mistake-item">✅ 诊断完成 | 总分:${result.score}<br>低头:${result.metrics.headAngle}° (${result.metrics.headScore}/30) 膝角:${result.metrics.kneeAngle}° (${result.metrics.kneeScore}/20)<br>🏅 ${result.suggestions[0] || "优秀"}</div>`;
         else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❌ 未检测到有效姿态</div>`;
     });
+
     setupVideoControls(userRecordedVideo, userPlayBtn, userPauseBtn, userRestartBtn, userSeekSlider);
     setupVideoControls(refVideo, refPlayBtn, refPauseBtn, refRestartBtn, refSeekSlider);
-    
-    // 启动系统
+
     (async () => {
         initPoseDetection();
         await setupCameraAndDetection(true);
         setUserSpeedSafe();
         setRefSpeedSafe();
-        if (window.drawingUtils === undefined) window.drawingUtils = drawingUtils;
-        // 预置有效分析默认提示
+        window.drawingUtils = window.drawingUtils || drawingUtils;
         lastValidAnalysis = null;
     })();
 </script>
