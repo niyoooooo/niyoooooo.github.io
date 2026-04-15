@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>后滚翻Pro · 双轨评分系统 | 团身友好优化版</title>
+    <title>后滚翻Pro · 三阶段完整度 | 团身→翻滚→起身 缺一不可</title>
     <style>
         * {
             margin: 0;
@@ -175,12 +175,17 @@
             padding: 4px 12px;
             color: #FDF4DC;
             font-weight: 500;
+            transition: all 0.1s;
         }
         .metric-excellent {
             background: #E9C46A;
             color: #1f2e2a;
             font-weight: bold;
             box-shadow: 0 0 0 1px #FFD966;
+        }
+        .metric-waiting {
+            background: #5e6b5e;
+            opacity: 0.7;
         }
         .mistake-scroll {
             background: #0a2a25;
@@ -366,6 +371,29 @@
             font-weight: 800;
             color: #FFD966;
         }
+        .completion-badge {
+            background: #2c6e60;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        .completion-complete {
+            background: #2a9d8f;
+            color: #fff;
+        }
+        .completion-partial {
+            background: #f39c12;
+            color: #1f2e2a;
+        }
+        .phase-badge {
+            display: inline-block;
+            background: #1f5e51;
+            border-radius: 16px;
+            padding: 2px 8px;
+            font-size: 0.65rem;
+            margin-left: 6px;
+        }
         @media (max-width: 760px) {
             .glass-container { padding: 1rem; }
             button { padding: 7px 14px; font-size: 0.75rem; }
@@ -376,10 +404,10 @@
 </head>
 <body>
 <div class="glass-container">
-    <h1>🤸 后滚翻·双轨评分系统 <small>团身友好优化版 | 只要团身就得高分</small></h1>
+    <h1>🤸 后滚翻·三阶段完整度 <small>团身 → 翻滚 → 起身 | 缺一不可</small></h1>
     <div class="subhead">
-        <span>📡 左侧为辅助参考分（保底70鼓励分）| 诊断报告独立技术分权重：团身50（膝角≤105°即高分）+ 推手20 + 低头10 + 髋折10 + 对称10 | 保底70分</span>
-        <span class="guarantee-badge">✨ 团身即高分 · 鼓励完成动作</span>
+        <span>📡 必须检测到完整三阶段：①团身姿态 ②翻滚过程（身体角度变化）③起身舒展/推手。跳过翻滚环节不得全分。</span>
+        <span class="guarantee-badge">✨ 完整动作=全分；未翻滚=最佳姿态分×80%</span>
     </div>
     <div class="dashboard">
         <div class="live-card">
@@ -391,14 +419,15 @@
             <div class="btn-group">
                 <button id="switchCameraBtn" class="btn-secondary" aria-label="切换摄像头">🔄 切换摄像头</button>
                 <button id="startRecordBtn" class="btn-record">🔴 精准录制</button>
-                <button id="stopRecordBtn" class="btn-secondary" disabled>⏹️ 停止</button>
-                <button id="analyzeCurrentVideoBtn" class="btn-primary">📈 深度分析</button>
+                <button id="stopRecordBtn" class="btn-secondary" disabled>⏹️ 停止并显示总分</button>
+                <button id="generateReportBtn" class="btn-primary">📋 深度报告</button>
                 <button id="retryCameraBtn" class="btn-retry" style="display: none;">📷 重新授权</button>
             </div>
             <div class="score-badge">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span>🏆 辅助参考分（鼓励性保底≥70）</span>
-                    <span id="scoreLockIndicator" class="status-badge" style="background: #2c6e60;">🔓 实时</span>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span>🏆 后滚翻总分</span>
+                    <span id="scoreLockIndicator" class="status-badge" style="background:#2c6e60;">⚪ 未录制</span>
+                    <span id="completionStatus" class="completion-badge">⏳ 等待动作</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <span class="live-score" id="liveScore">--</span>
@@ -406,28 +435,28 @@
                 </div>
             </div>
             <div class="angle-metrics" id="angleMetricsPanel">
-                <span class="metric">🧘 团身膝角: --°</span>
-                <span class="metric">📐 低头角: --°</span>
-                <span class="metric">🔄 髋折叠: --°</span>
-                <span class="metric">✊ 推手效能: --/20</span>
-                <span class="metric">⚖️ 对称性: --</span>
+                <span class="metric metric-waiting">🧘 团身膝角: --°</span>
+                <span class="metric metric-waiting">📐 低头角: --°</span>
+                <span class="metric metric-waiting">🔄 髋折叠: --°</span>
+                <span class="metric metric-waiting">✊ 推手效能: --/20</span>
+                <span class="metric metric-waiting">⚖️ 对称性: --</span>
             </div>
             <div id="liveHints" class="mistake-scroll" style="max-height: 110px;">
-                <div class="mistake-item">🤸 团身友好模式：只要做出团身动作即可获得高分，辅助参考分仅用于鼓励</div>
+                <div class="mistake-item">🤸 三阶段完整度：①团身姿态 ②翻滚过程（身体角度翻转）③起身舒展/推手。必须翻滚过去才能得全分！</div>
             </div>
         </div>
         <div class="report-card">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
-                <span style="font-weight: bold; font-size: 1.2rem;">📋 智能诊断报告（含独立技术分）</span>
+                <span style="font-weight: bold; font-size: 1.2rem;">📋 深度报告区域</span>
                 <label class="file-label">
                     📂 上传动作视频
                     <input type="file" id="uploadVideoInput" accept="video/*">
                 </label>
             </div>
             <div id="detailedMistakes" class="mistake-scroll" style="flex:1;">
-                <div class="mistake-item">✨ 本报告独立评估技术得分（权重：团身50+推手20+低头10+髋折10+对称10，总分100，保底70）。</div>
-                <div class="mistake-item">💪 团身紧判定已优化：膝角≤105°即可获得45分以上高分，鼓励每一位学员。</div>
-                <div class="mistake-item">📌 每次分析将展示优化后的技术总分及各细分项得分，并提供个性化训练建议。</div>
+                <div class="mistake-item">✨ 停止录制后点击【深度报告】生成详细评分明细 + 针对性训练建议。</div>
+                <div class="mistake-item">💪 阶梯规则: 膝角≤70°=50分 / 低头≥30°=10分 / 髋折≤80°=10分 / 推手20分 / 对称≥9.5=10分</div>
+                <div class="mistake-item">📌 完整度判定：必须按顺序检测到团身→翻滚→起身三个阶段，缺一则按最佳姿态分×80%折算。</div>
             </div>
             <div class="speed-panel" style="margin-top: 16px;">
                 <span>🐢 动作慢放</span>
@@ -435,7 +464,6 @@
                 <span id="userSpeedVal">0.6x</span>
                 <button id="applyUserSpeed" class="btn-secondary" style="padding: 4px 12px;">应用</button>
             </div>
-            <button id="debugDetectBtn" class="debug-btn" style="margin-top: 12px;">🔍 鹰眼深度诊断（生成独立评分+建议）</button>
         </div>
     </div>
     <div class="comparison-area">
@@ -478,7 +506,7 @@
             <button id="applyRefSpeed" class="btn-secondary" style="padding: 4px 12px;">应用</button>
         </div>
     </div>
-    <footer>⚡ 双轨评分 | 团身友好：膝角≤105°即得高分（满分50），鼓励动作完成度 | 左侧辅助参考分与诊断独立评分互不影响</footer>
+    <footer>⚡ 三阶段判定：①团身(髋低于肩+膝角<140°) ②翻滚(身体倾斜角度从正变反，检测躯干角度翻转) ③起身(髋回升或推手≥8)。缺一不可。</footer>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
@@ -486,7 +514,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 <script>
     (function(){
-        // DOM 元素
+        // DOM elements
         const videoElement = document.getElementById('inputVideo');
         const poseCanvas = document.getElementById('poseCanvas');
         const startRecordBtn = document.getElementById('startRecordBtn');
@@ -494,7 +522,7 @@
         const switchCameraBtn = document.getElementById('switchCameraBtn');
         const retryCameraBtn = document.getElementById('retryCameraBtn');
         const cameraErrorMsgDiv = document.getElementById('cameraErrorMsg');
-        const analyzeCurrentVideoBtn = document.getElementById('analyzeCurrentVideoBtn');
+        const generateReportBtn = document.getElementById('generateReportBtn');
         const liveScoreSpan = document.getElementById('liveScore');
         const liveHintsDiv = document.getElementById('liveHints');
         const detailedMistakesDiv = document.getElementById('detailedMistakes');
@@ -509,9 +537,9 @@
         const refSpeedVal = document.getElementById('refSpeedVal');
         const applyRefSpeed = document.getElementById('applyRefSpeed');
         const angleMetricsPanel = document.getElementById('angleMetricsPanel');
-        const debugDetectBtn = document.getElementById('debugDetectBtn');
         const resetScoreBtn = document.getElementById('resetScoreBtn');
         const scoreLockIndicator = document.getElementById('scoreLockIndicator');
+        const completionStatusSpan = document.getElementById('completionStatus');
         const compareStatus = document.getElementById('compareStatus');
         const userPlayBtn = document.getElementById('userPlayBtn');
         const userPauseBtn = document.getElementById('userPauseBtn');
@@ -528,24 +556,141 @@
         let currentStream = null;
         let pose = null;
         let isProcessingFrame = false;
-        let lastValidAnalysis = null;      // 存储实时分析（辅助参考分）
         let frameRequestId = null;
-        let isFrameLoopActive = false;
-        let isScoreLocked = false;
-        let lastUITimestamp = 0;
-        const UI_UPDATE_INTERVAL_MS = 80;
-
+        
+        // 三阶段完成度状态机
+        let actionState = {
+            hasTucked: false,        // 阶段1: 团身姿态
+            hasRolled: false,        // 阶段2: 翻滚过程（身体角度发生翻转）
+            hasExtended: false,      // 阶段3: 起身舒展/推手
+            completed: false,        // 完整动作标记（三个阶段全部完成）
+            bestPoseScore: 70,       // 录制期间最佳姿态原始分
+            bestAnalysis: null       // 最佳姿态对应的详细分析
+        };
+        
+        // 用于检测翻滚的躯干角度历史
+        let torsoAngleHistory = [];
+        let hasObservedRoll = false;
+        
+        let currentLiveAnalysis = null;
+        let lastRecordedResult = null;
+        
+        // ---------- 阶梯评分函数 ----------
+        function getTuckScoreByAngle(kneeAngle) {
+            if (kneeAngle <= 70) return 50;
+            if (kneeAngle <= 80) return 48;
+            if (kneeAngle <= 90) return 46;
+            if (kneeAngle <= 105) return 45 + Math.floor((105 - kneeAngle) / 5);
+            if (kneeAngle <= 120) return 30;
+            if (kneeAngle <= 140) return 22;
+            return 15;
+        }
+        function getHeadScoreByAngle(headAngle) {
+            if (headAngle >= 30) return 10;
+            if (headAngle >= 25) return 9;
+            if (headAngle >= 20) return 7;
+            if (headAngle >= 15) return 5;
+            if (headAngle >= 8) return 3;
+            return 1;
+        }
+        function getHipScoreByAngle(hipAngle) {
+            if (hipAngle <= 80) return 10;
+            if (hipAngle <= 85) return 9;
+            if (hipAngle <= 90) return 8;
+            if (hipAngle <= 95) return 6;
+            if (hipAngle <= 105) return 4;
+            if (hipAngle <= 115) return 2;
+            return 1;
+        }
+        function getPushScore(wristBelowThreshold, elbowOptimal, avgElbowAngle) {
+            if (wristBelowThreshold && elbowOptimal) return 20;
+            if (wristBelowThreshold || elbowOptimal) return 14;
+            if (avgElbowAngle > 40 && avgElbowAngle < 160) return 8;
+            return 3;
+        }
+        function getSymScore(shoulderTilt, hipTwist) {
+            let penalty = (shoulderTilt * 2.2 + hipTwist * 1.3);
+            penalty = Math.min(9, penalty * 100);
+            let sym = Math.max(0, 10 - penalty);
+            return Math.min(10, sym);
+        }
         function calculateAngle(a, b, c) {
             const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
             let angle = Math.abs(radians * 180.0 / Math.PI);
             if (angle > 180) angle = 360 - angle;
             return Math.min(180, angle);
         }
-
-        // 核心评估函数：团身紧评分优化 —— 只要有团身动作（膝角≤105°）即可获得45分以上，满分50
-        // 其他评分项保持不变：推手20 + 低头10 + 髋折10 + 对称10，总分100，保底70
+        
+        // 计算躯干倾斜角度（肩中点到髋中点连线与垂直方向的夹角）
+        function getTorsoAngle(landmarks) {
+            if (!landmarks) return 0;
+            const lSh = landmarks[11], rSh = landmarks[12];
+            const lHip = landmarks[23], rHip = landmarks[24];
+            const midShoulder = { x: (lSh.x + rSh.x)/2, y: (lSh.y + rSh.y)/2 };
+            const midHip = { x: (lHip.x + rHip.x)/2, y: (lHip.y + rHip.y)/2 };
+            const dx = midShoulder.x - midHip.x;
+            const dy = midShoulder.y - midHip.y;
+            // 与垂直方向夹角
+            const verticalVec = { x: 0, y: 1 };
+            const dot = dx * verticalVec.x + dy * verticalVec.y;
+            const mag = Math.hypot(dx, dy);
+            if (mag < 0.001) return 0;
+            let angle = Math.acos(Math.min(1, Math.max(-1, dot / mag))) * 180 / Math.PI;
+            // 根据dx正负判断左右倾斜，翻滚时角度会很大
+            return dx > 0 ? angle : -angle;
+        }
+        
+        // 检测翻滚：躯干角度从正值（或接近0）变为负值，且变化幅度超过阈值
+        function detectRoll(torsoAngle) {
+            torsoAngleHistory.push(torsoAngle);
+            if (torsoAngleHistory.length > 15) torsoAngleHistory.shift();
+            if (torsoAngleHistory.length < 8) return false;
+            
+            let firstHalf = torsoAngleHistory.slice(0, Math.floor(torsoAngleHistory.length/2));
+            let secondHalf = torsoAngleHistory.slice(Math.floor(torsoAngleHistory.length/2));
+            let avgFirst = firstHalf.reduce((a,b)=>a+b,0)/firstHalf.length;
+            let avgSecond = secondHalf.reduce((a,b)=>a+b,0)/secondHalf.length;
+            
+            // 从正/零变为负，且变化幅度超过30度，表示身体翻滚过去
+            if (avgFirst > -10 && avgSecond < -30 && (avgFirst - avgSecond) > 35) {
+                return true;
+            }
+            return false;
+        }
+        
+        // 判断团身姿态
+        function isTuckGesture(landmarks) {
+            if (!landmarks) return false;
+            const lSh = landmarks[11], rSh = landmarks[12];
+            const lHip = landmarks[23], rHip = landmarks[24];
+            const midShoulderY = (lSh.y + rSh.y) / 2;
+            const midHipY = (lHip.y + rHip.y) / 2;
+            const hipBelowShoulder = midHipY > midShoulderY + 0.02;
+            const lKnee = landmarks[25], rKnee = landmarks[26];
+            const lAnkle = landmarks[27], rAnkle = landmarks[28];
+            const leftKnee = calculateAngle(lHip, lKnee, lAnkle);
+            const rightKnee = calculateAngle(rHip, rKnee, rAnkle);
+            const avgKnee = (leftKnee + rightKnee) / 2;
+            const kneeFolded = avgKnee < 140;
+            return hipBelowShoulder && kneeFolded;
+        }
+        
+        // 判断起身舒展
+        function isExtensionGesture(landmarks, pushScore, prevHipY) {
+            if (!landmarks) return false;
+            const lHip = landmarks[23], rHip = landmarks[24];
+            const currentHipY = (lHip.y + rHip.y) / 2;
+            let hipRising = false;
+            if (prevHipY !== null && (prevHipY - currentHipY) > 0.025) {
+                hipRising = true;
+            }
+            const hasPush = pushScore >= 8;
+            return hipRising || hasPush;
+        }
+        
+        // 评估函数
         function evaluateMovement(landmarks) {
-            if (!landmarks || landmarks.length === 0) return null;
+            if (!landmarks) return null;
             const nose = landmarks[0];
             const lSh = landmarks[11], rSh = landmarks[12];
             const lHip = landmarks[23], rHip = landmarks[24];
@@ -553,7 +698,6 @@
             const lAnkle = landmarks[27], rAnkle = landmarks[28];
             const lElbow = landmarks[13], rElbow = landmarks[14];
             const lWrist = landmarks[15], rWrist = landmarks[16];
-            
             const neckBase = { x: (lSh.x + rSh.x)/2, y: (lSh.y + rSh.y)/2 };
             const headVec = { x: nose.x - neckBase.x, y: nose.y - neckBase.y };
             const verticalVec = { x: 0, y: 1 };
@@ -562,55 +706,13 @@
             let rawNeckAngle = 0;
             if (magHead > 0.001) rawNeckAngle = Math.acos(Math.min(1, Math.max(-1, dot / magHead))) * 180 / Math.PI;
             const headDownAngle = Math.min(85, rawNeckAngle);
-            // 低头评分（满分10分）
-            let headScore = 0;
-            if (headDownAngle >= 30) headScore = 10;
-            else if (headDownAngle >= 25) headScore = 9;
-            else if (headDownAngle >= 20) headScore = 7;
-            else if (headDownAngle >= 15) headScore = 5;
-            else if (headDownAngle >= 8) headScore = 3;
-            else headScore = 1;
-            
             const leftKneeAngle = calculateAngle(lHip, lKnee, lAnkle);
             const rightKneeAngle = calculateAngle(rHip, rKnee, rAnkle);
             const avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
-            
-            // 团身紧评分优化（满分50分）—— 只要做出团身动作（膝角≤105°）即可获得高分
-            // 膝角≤105°: 45~50分区间；膝角>105°: 根据严重程度递减，但最低给15分鼓励
-            let tuckScore = 0;
-            if (avgKneeAngle <= 70) {
-                tuckScore = 50;  // 完美团身
-            } else if (avgKneeAngle <= 80) {
-                tuckScore = 48;
-            } else if (avgKneeAngle <= 90) {
-                tuckScore = 46;
-            } else if (avgKneeAngle <= 105) {
-                // 有团身动作，给45-47分鼓励
-                tuckScore = 45 + Math.floor((105 - avgKneeAngle) / 5);
-                tuckScore = Math.min(47, tuckScore);
-            } else if (avgKneeAngle <= 120) {
-                tuckScore = 30;
-            } else if (avgKneeAngle <= 140) {
-                tuckScore = 22;
-            } else {
-                tuckScore = 15;  // 即使团身很差也给基础鼓励分
-            }
-            tuckScore = Math.min(50, Math.max(15, tuckScore));
-            
             const midShoulder = { x: (lSh.x + rSh.x)/2, y: (lSh.y + rSh.y)/2 };
             const midHip = { x: (lHip.x + rHip.x)/2, y: (lHip.y + rHip.y)/2 };
             const midKnee = { x: (lKnee.x + rKnee.x)/2, y: (lKnee.y + rKnee.y)/2 };
             const hipFoldAngle = calculateAngle(midShoulder, midHip, midKnee);
-            // 髋部对折评分（满分10分）
-            let hipScore = 0;
-            if (hipFoldAngle <= 80) hipScore = 10;
-            else if (hipFoldAngle <= 85) hipScore = 9;
-            else if (hipFoldAngle <= 90) hipScore = 8;
-            else if (hipFoldAngle <= 95) hipScore = 6;
-            else if (hipFoldAngle <= 105) hipScore = 4;
-            else if (hipFoldAngle <= 115) hipScore = 2;
-            else hipScore = 1;
-            
             const lWristRelY = lWrist.y - lSh.y;
             const rWristRelY = rWrist.y - rSh.y;
             const wristBelowThreshold = (lWristRelY > 0.04 && rWristRelY > 0.04);
@@ -618,45 +720,31 @@
             const elbowRightAngle = calculateAngle(rSh, rElbow, rWrist);
             const avgElbowAngle = (elbowLeftAngle + elbowRightAngle) / 2;
             const elbowOptimal = avgElbowAngle > 55 && avgElbowAngle < 145;
-            // 推手有力评分（满分20分）
-            let pushScore = 0;
-            if (wristBelowThreshold && elbowOptimal) pushScore = 20;
-            else if (wristBelowThreshold || elbowOptimal) pushScore = 14;
-            else if (avgElbowAngle > 40 && avgElbowAngle < 160) pushScore = 8;
-            else pushScore = 3;
-            
             const shoulderTilt = Math.abs(lSh.y - rSh.y);
             const hipTwist = Math.abs(lHip.x - rHip.x);
-            let symmetryPenalty = (shoulderTilt * 2.2 + hipTwist * 1.3);
-            symmetryPenalty = Math.min(9, symmetryPenalty * 100);
-            // 身体对称评分（满分10分）
-            let symScore = Math.max(0, 10 - symmetryPenalty);
-            symScore = Math.min(10, symScore);
             
-            // 独立技术总分（满分100）
-            let rawTechnicalScore = Math.floor(tuckScore + pushScore + headScore + hipScore + symScore);
-            // 保底机制：每位学员不低于70分
-            let technicalScoreFinal = Math.max(70, Math.min(100, rawTechnicalScore));
+            let tuckScore = getTuckScoreByAngle(avgKneeAngle);
+            let headScore = getHeadScoreByAngle(headDownAngle);
+            let hipScore = getHipScoreByAngle(hipFoldAngle);
+            let pushScore = getPushScore(wristBelowThreshold, elbowOptimal, avgElbowAngle);
+            let symScore = getSymScore(shoulderTilt, hipTwist);
+            let rawTotal = Math.floor(tuckScore + pushScore + headScore + hipScore + symScore);
+            let finalTotal = Math.max(70, Math.min(100, rawTotal));
             
-            // 辅助参考分（左侧展示，同样保底70但和独立评分分开计算逻辑）
-            let referenceScore = Math.max(70, rawTechnicalScore);
-            
-            // 构建诊断建议 (基于独立技术评分)
             let suggestions = [];
-            if (avgKneeAngle > 105) suggestions.push(`🎯 团身动作待加强：当前膝角 ${Math.floor(avgKneeAngle)}° > 105°，团身得分${tuckScore}/50，建议进一步缩小身体半径。`);
-            else if (avgKneeAngle > 70) suggestions.push(`✅ 团身已成形！膝角 ${Math.floor(avgKneeAngle)}° ≤105°，团身得分${tuckScore}/50，继续收紧效果更佳。`);
-            else suggestions.push(`✅ 团身非常紧实！膝角 ${Math.floor(avgKneeAngle)}° ≤70°，团身满分50/50。`);
-            
-            if (!wristBelowThreshold || !elbowOptimal) suggestions.push(`💪 推手发力不足 (得分 ${pushScore}/20)。训练“肩臂推撑”，强调手掌主动按压地面。`);
-            else suggestions.push(`✨ 推手爆发力出色！手腕下压+肘部动态支撑完美 (得分20/20)。`);
-            if (headDownAngle < 20) suggestions.push(`🔻 低头意识不足 (${Math.floor(headDownAngle)}°，得分${headScore}/10)，后滚翻时下颌贴近胸骨。`);
-            if (hipFoldAngle > 90) suggestions.push(`🔄 髋部折叠稍松散 (${Math.floor(hipFoldAngle)}°，得分${hipScore}/10)，加强腹背收缩。`);
-            if (symScore < 8) suggestions.push(`⚖️ 身体侧倾 (对称分 ${symScore.toFixed(1)}/10)，肩髋保持水平。`);
-            if (suggestions.length === 0) suggestions.push("🏅 动作精湛！团身紧+推手有力+全身协调。");
+            if (avgKneeAngle > 105) suggestions.push(`🎯 团身待加强: 膝角${Math.floor(avgKneeAngle)}°, 得分${tuckScore}/50`);
+            else if (avgKneeAngle > 70) suggestions.push(`✅ 团身良好: 膝角${Math.floor(avgKneeAngle)}°, 得分${tuckScore}/50`);
+            else suggestions.push(`🏆 团身完美! 膝角${Math.floor(avgKneeAngle)}°, 满分50/50`);
+            if (pushScore < 20) suggestions.push(`💪 推手效能${pushScore}/20, 强化手掌按压`);
+            else suggestions.push(`✨ 推手爆发满分!`);
+            if (headDownAngle < 30) suggestions.push(`🔻 低头得分${headScore}/10, 目标≥30°`);
+            if (hipFoldAngle > 80) suggestions.push(`🔄 髋折得分${hipScore}/10, 需≤80°`);
+            if (symScore < 9.5) suggestions.push(`⚖️ 对称性${symScore.toFixed(1)}/10`);
+            if (suggestions.length === 0) suggestions.push("🏅 五项全能优秀！");
             
             return {
-                referenceScore: referenceScore,   // 左侧辅助参考分（保底70）
-                technicalScore: technicalScoreFinal, // 诊断报告独立技术分（团身友好优化，保底70）
+                totalScore: finalTotal,
+                pushScore: pushScore,
                 metrics: {
                     kneeAngle: Math.floor(avgKneeAngle),
                     headAngle: Math.floor(headDownAngle),
@@ -670,46 +758,268 @@
                 suggestions: suggestions.slice(0, 5)
             };
         }
-
-        function throttledUpdateUI(analysis, now) {
-            if (!analysis || isScoreLocked) return false;
-            if (now - lastUITimestamp >= UI_UPDATE_INTERVAL_MS) {
-                liveScoreSpan.innerText = analysis.referenceScore;
-                const kneeExcellent = analysis.metrics.kneeAngle <= 105; // 团身友好：≤105就算优秀显示
-                const pushExcellent = analysis.metrics.pushScore >= 18;
+        
+        let lastHipY = null;
+        let lastTorsoAngle = 0;
+        
+        // 更新三阶段状态机
+        function updateCompletionState(analysis, landmarks) {
+            if (!analysis || !landmarks) return;
+            const isTucking = isTuckGesture(landmarks);
+            const torsoAngle = getTorsoAngle(landmarks);
+            const isRolling = detectRoll(torsoAngle);
+            const isExtending = isExtensionGesture(landmarks, analysis.pushScore, lastHipY);
+            
+            // 更新髋部Y值用于起身检测
+            const lHip = landmarks[23], rHip = landmarks[24];
+            const currentHipY = (lHip.y + rHip.y) / 2;
+            
+            // 更新最佳原始分
+            if (analysis.totalScore > actionState.bestPoseScore) {
+                actionState.bestPoseScore = analysis.totalScore;
+                actionState.bestAnalysis = JSON.parse(JSON.stringify(analysis));
+            }
+            
+            // 阶段1: 团身姿态
+            if (isTucking && !actionState.hasTucked) {
+                actionState.hasTucked = true;
+            }
+            
+            // 阶段2: 翻滚过程（必须在团身之后检测到躯干角度翻转）
+            if (actionState.hasTucked && !actionState.hasRolled && isRolling) {
+                actionState.hasRolled = true;
+            }
+            
+            // 阶段3: 起身舒展（必须在翻滚之后检测到）
+            if (actionState.hasRolled && !actionState.hasExtended && isExtending) {
+                actionState.hasExtended = true;
+            }
+            
+            // 如果团身后直接起身但没有翻滚，不标记为完整
+            if (actionState.hasTucked && actionState.hasExtended && !actionState.hasRolled) {
+                // 没有翻滚，不算完整
+            }
+            
+            // 完成条件：三个阶段全部满足
+            if (actionState.hasTucked && actionState.hasRolled && actionState.hasExtended) {
+                actionState.completed = true;
+            }
+            
+            lastHipY = currentHipY;
+            lastTorsoAngle = torsoAngle;
+            
+            // 更新UI完成度状态
+            let phaseText = "";
+            if (actionState.completed) {
+                phaseText = "✅ 完整动作";
+                completionStatusSpan.innerText = '✅ 完整(三阶段)';
+                completionStatusSpan.className = 'completion-badge completion-complete';
+            } else {
+                if (actionState.hasTucked) phaseText = "①团身✓";
+                else phaseText = "①团身⚪";
+                if (actionState.hasRolled) phaseText += " ②翻滚✓";
+                else if (actionState.hasTucked) phaseText += " ②翻滚⚪";
+                else phaseText += " ②翻滚⚪";
+                if (actionState.hasExtended) phaseText += " ③起身✓";
+                else if (actionState.hasRolled) phaseText += " ③起身⚪";
+                else phaseText += " ③起身⚪";
+                completionStatusSpan.innerText = phaseText;
+                completionStatusSpan.className = 'completion-badge';
+            }
+        }
+        
+        // 更新UI
+        function updateLiveUI(analysis) {
+            if (!analysis || !isRecording) return;
+            const m = analysis.metrics;
+            angleMetricsPanel.innerHTML = `
+                <span class="metric ${m.kneeAngle <= 70 ? 'metric-excellent' : ''}">🧘 团身膝角: ${m.kneeAngle}° (${m.tuckScore}/50)</span>
+                <span class="metric ${m.headAngle >= 30 ? 'metric-excellent' : ''}">📐 低头角: ${m.headAngle}° (${m.headScore}/10)</span>
+                <span class="metric ${m.hipAngle <= 80 ? 'metric-excellent' : ''}">🔄 髋折叠: ${m.hipAngle}° (${m.hipScore}/10)</span>
+                <span class="metric ${m.pushScore >= 20 ? 'metric-excellent' : ''}">✊ 推手效能: ${m.pushScore}/20</span>
+                <span class="metric ${m.symScore >= 9.5 ? 'metric-excellent' : ''}">⚖️ 对称性: ${m.symScore.toFixed(1)}/10</span>
+            `;
+            liveScoreSpan.innerText = actionState.bestPoseScore;
+            let statusMsg = actionState.completed ? "完整动作(已翻滚)" : (actionState.hasRolled ? "已翻滚，等待起身" : (actionState.hasTucked ? "团身中，等待翻滚" : "等待团身"));
+            liveHintsDiv.innerHTML = `<div class="mistake-item">🎯 最佳姿态分: ${actionState.bestPoseScore} | ${statusMsg} | 必须翻滚过去才能得全分</div>`;
+            currentLiveAnalysis = analysis;
+        }
+        
+        // 停止录制时计算最终总分
+        function freezeFinalResult() {
+            let finalScore = 70;
+            let finalAnalysis = null;
+            let rawBest = actionState.bestPoseScore;
+            
+            if (actionState.completed && actionState.bestAnalysis) {
+                // 完整动作（团身+翻滚+起身）：使用最佳姿态分
+                finalScore = actionState.bestPoseScore;
+                finalAnalysis = JSON.parse(JSON.stringify(actionState.bestAnalysis));
+            } else if (actionState.bestAnalysis) {
+                // 未完整动作（缺少翻滚环节）：最佳姿态分 × 80%
+                let calculated = Math.floor(actionState.bestPoseScore * 0.8);
+                finalScore = Math.max(56, Math.min(100, calculated));
+                finalAnalysis = JSON.parse(JSON.stringify(actionState.bestAnalysis));
+                finalAnalysis.totalScore = finalScore;
+                let missing = [];
+                if (!actionState.hasRolled) missing.push("翻滚");
+                if (!actionState.hasExtended) missing.push("起身");
+                finalAnalysis.suggestions.unshift(`⚠️ 动作未完整(缺少${missing.join('、')})，总分按最佳姿态分${actionState.bestPoseScore}×80% = ${finalScore} 折算。请完成后滚翻全流程：团身→翻滚→起身。`);
+            } else {
+                finalScore = 56;
+                finalAnalysis = {
+                    totalScore: 56,
+                    metrics: { kneeAngle: 0, headAngle: 0, hipAngle: 0, pushScore: 0, symScore: 0, tuckScore: 0, headScore: 0, hipScore: 0 },
+                    suggestions: ["未检测到后滚翻姿态，请确保全身入镜并完成后滚翻全流程。"]
+                };
+            }
+            
+            lastRecordedResult = {
+                completed: actionState.completed,
+                finalScore: finalScore,
+                analysis: finalAnalysis,
+                rawBestScore: actionState.bestPoseScore
+            };
+            
+            liveScoreSpan.innerText = finalScore;
+            const m = finalAnalysis.metrics;
+            if (m && m.kneeAngle !== undefined) {
                 angleMetricsPanel.innerHTML = `
-                    <span class="metric ${kneeExcellent ? 'metric-excellent' : ''}">🧘 团身膝角: ${analysis.metrics.kneeAngle}°</span>
-                    <span class="metric">📐 低头角: ${analysis.metrics.headAngle}°</span>
-                    <span class="metric">🔄 髋折叠: ${analysis.metrics.hipAngle}°</span>
-                    <span class="metric ${pushExcellent ? 'metric-excellent' : ''}">✊ 推手效能: ${analysis.metrics.pushScore}/20</span>
-                    <span class="metric">⚖️ 对称性: ${analysis.metrics.symScore.toFixed(1)}</span>
+                    <span class="metric">🧘 团身膝角: ${m.kneeAngle}° (${m.tuckScore}/50)</span>
+                    <span class="metric">📐 低头角: ${m.headAngle}° (${m.headScore}/10)</span>
+                    <span class="metric">🔄 髋折叠: ${m.hipAngle}° (${m.hipScore}/10)</span>
+                    <span class="metric">✊ 推手效能: ${m.pushScore}/20</span>
+                    <span class="metric">⚖️ 对称性: ${m.symScore.toFixed(1)}/10</span>
                 `;
-                let topSuggestion = analysis.suggestions[0] || "保持动作节奏";
-                liveHintsDiv.innerHTML = `<div class="mistake-item">💡 实时建议：${topSuggestion}</div>`;
-                lastUITimestamp = now;
-                return true;
+            } else {
+                angleMetricsPanel.innerHTML = `<span class="metric metric-waiting">⚠️ 未检测到有效姿态</span>`;
             }
-            return false;
-        }
-
-        function lockCurrentScore() {
-            if (!isScoreLocked && lastValidAnalysis) {
-                isScoreLocked = true;
-                liveScoreSpan.innerText = lastValidAnalysis.referenceScore;
-                scoreLockIndicator.innerText = '🔒 已锁定';
-                scoreLockIndicator.style.background = '#E76F51';
-                liveHintsDiv.innerHTML = `<div class="mistake-item">🔒 录制完成，辅助参考分 ${lastValidAnalysis.referenceScore} 。查看右侧诊断报告获取独立技术评分（团身50分制，膝角≤105°即高分）。</div>`;
+            
+            let completeMsg = actionState.completed ? "完整动作(团身+翻滚+起身)" : `未完整(缺少${!actionState.hasRolled ? '翻滚' : '起身'})`;
+            liveHintsDiv.innerHTML = `<div class="mistake-item">⏹️ 录制结束 | ${completeMsg} | 最终总分 ${finalScore}。点击【深度报告】查看明细。</div>`;
+            
+            if (actionState.completed) {
+                completionStatusSpan.innerText = '✅ 完整(三阶段)';
+                completionStatusSpan.className = 'completion-badge completion-complete';
+            } else {
+                completionStatusSpan.innerText = `⚠️ 未完整(缺${!actionState.hasRolled ? '翻滚' : '起身'})`;
+                completionStatusSpan.className = 'completion-badge completion-partial';
             }
         }
-
-        function resetScoreLock() {
-            isScoreLocked = false;
-            scoreLockIndicator.innerText = '🔓 实时';
-            scoreLockIndicator.style.background = '#2c6e60';
-            if (lastValidAnalysis) throttledUpdateUI(lastValidAnalysis, performance.now());
-            else liveScoreSpan.innerText = '--';
+        
+        // 深度报告生成
+        function generateDeepReport() {
+            if (!lastRecordedResult) {
+                detailedMistakesDiv.innerHTML = `<div class="mistake-item">❗ 请先完成录制（停止录制）后再生成报告。</div>`;
+                return;
+            }
+            const a = lastRecordedResult.analysis;
+            const completed = lastRecordedResult.completed;
+            const rawBest = lastRecordedResult.rawBestScore || 70;
+            const m = a.metrics;
+            let html = `<div class="report-score-card"><span>📊 最终技术总分 (团身50+推手20+低头10+髋折10+对称10) </span><span class="report-score-value">${a.totalScore}</span>`;
+            if (!completed) {
+                html += `<span style="font-size:0.7rem; margin-left:8px;">(未完整动作，缺少翻滚环节，最佳姿态分${rawBest} × 80% = ${a.totalScore})</span>`;
+            } else {
+                html += `<span style="font-size:0.7rem; margin-left:8px;">(完整动作：团身→翻滚→起身，全分)</span>`;
+            }
+            html += `</div>`;
+            html += `<div class="mistake-item" style="background:#12453e; border-radius:20px;"><span class="badge badge-success">🎯 各维度阶梯得分</span></div>`;
+            if (m && m.kneeAngle !== undefined) {
+                html += `<div class="mistake-item">🧘 团身紧度(膝角${m.kneeAngle}°): ${m.tuckScore}/50分 ${m.kneeAngle <=70 ? '🏆满分' : m.kneeAngle <=105 ? '良好' : '待提升'}</div>`;
+                html += `<div class="mistake-item">✊ 推手有力: ${m.pushScore}/20分 ${m.pushScore >=20 ? '满分爆发' : ''}</div>`;
+                html += `<div class="mistake-item">📐 低头控制: ${m.headScore}/10分 (低头角${m.headAngle}°)</div>`;
+                html += `<div class="mistake-item">🔄 髋部对折: ${m.hipScore}/10分 (髋角${m.hipAngle}°)</div>`;
+                html += `<div class="mistake-item">⚖️ 身体对称: ${m.symScore.toFixed(1)}/10分</div>`;
+            } else {
+                html += `<div class="mistake-item">⚠️ 无有效姿态数据</div>`;
+            }
+            html += `<div class="mistake-item"><span class="badge badge-success">📌 针对性训练建议</span></div>`;
+            a.suggestions.forEach(adv => { html += `<div class="mistake-item">🔹 ${adv}</div>`; });
+            html += `<div class="advice-highlight">✨ 三阶段完整度判定：①团身姿态 ②翻滚过程（躯干角度翻转）③起身舒展/推手。必须翻滚过去才能得全分！</div>`;
+            detailedMistakesDiv.innerHTML = html;
+            compareStatus.innerHTML = `✅ 报告已生成 | 总分: ${a.totalScore}`;
         }
-
+        
+        // 姿态回调
+        let poseDetectionActive = false;
+        function onPoseResults(results) {
+            const ctx = poseCanvas.getContext('2d');
+            ctx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
+            if(results.poseLandmarks && poseDetectionActive && isRecording) {
+                if(window.drawingUtils) {
+                    window.drawingUtils.drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS, { color: "#37F5D0", lineWidth: 2 });
+                    window.drawingUtils.drawLandmarks(ctx, results.poseLandmarks, { color: "#FFB347", radius: 1.8 });
+                }
+                const analysis = evaluateMovement(results.poseLandmarks);
+                if (analysis) {
+                    updateCompletionState(analysis, results.poseLandmarks);
+                    updateLiveUI(analysis);
+                }
+            } else if (!isRecording || !poseDetectionActive) {
+                ctx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
+            }
+        }
+        
+        function resetAllState() {
+            actionState = {
+                hasTucked: false,
+                hasRolled: false,
+                hasExtended: false,
+                completed: false,
+                bestPoseScore: 70,
+                bestAnalysis: null
+            };
+            torsoAngleHistory = [];
+            lastHipY = null;
+            lastTorsoAngle = 0;
+            currentLiveAnalysis = null;
+            lastRecordedResult = null;
+            liveScoreSpan.innerText = '--';
+            completionStatusSpan.innerText = '⏳ 等待动作';
+            completionStatusSpan.className = 'completion-badge';
+            angleMetricsPanel.innerHTML = `<span class="metric metric-waiting">🧘 团身膝角: --°</span><span class="metric metric-waiting">📐 低头角: --°</span><span class="metric metric-waiting">🔄 髋折叠: --°</span><span class="metric metric-waiting">✊ 推手效能: --/20</span><span class="metric metric-waiting">⚖️ 对称性: --</span>`;
+            liveHintsDiv.innerHTML = `<div class="mistake-item">🤸 三阶段完整度：①团身姿态 ②翻滚过程（身体角度翻转）③起身舒展/推手。必须翻滚过去才能得全分！</div>`;
+        }
+        
+        // 录制逻辑
+        function startRecording() {
+            if (!currentStream || !MediaRecorder) { alert("摄像头未就绪"); return; }
+            recordedChunks = [];
+            let mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4';
+            mediaRecorder = new MediaRecorder(currentStream, { mimeType });
+            mediaRecorder.ondataavailable = (e) => { if(e.data.size) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                if (userRecordedVideo.src && userRecordedVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src);
+                userRecordedVideo.src = url;
+                userRecordedVideo.load();
+                userRecordedVideo.onloadeddata = () => { userRecordedVideo.playbackRate = parseFloat(userSpeedSlider.value); };
+                isRecording = false;
+                poseDetectionActive = false;
+                startRecordBtn.disabled = false;
+                stopRecordBtn.disabled = true;
+                startRecordBtn.classList.remove('recording');
+                startRecordBtn.innerText = '🔴 精准录制';
+                scoreLockIndicator.innerText = '⏹️ 已停止';
+                freezeFinalResult();
+            };
+            mediaRecorder.start();
+            isRecording = true;
+            poseDetectionActive = true;
+            startRecordBtn.disabled = true;
+            stopRecordBtn.disabled = false;
+            startRecordBtn.classList.add('recording');
+            startRecordBtn.innerText = '🔴 录制中...';
+            scoreLockIndicator.innerText = '🔴 录制+三阶段监测';
+            resetAllState();
+        }
+        function stopRecording() {
+            if(mediaRecorder && isRecording) mediaRecorder.stop();
+        }
+        
+        // 摄像头初始化
         async function initCameraStream(preferBack = true) {
             if (isRecording) { alert("请先停止录制再切换摄像头"); return false; }
             if (currentStream) currentStream.getTracks().forEach(track => track.stop());
@@ -746,14 +1056,17 @@
                 return false;
             }
         }
-
-        function stopFrameLoop() { if (frameRequestId) cancelAnimationFrame(frameRequestId); isFrameLoopActive = false; isProcessingFrame = false; }
+        
+        function initPoseDetection() {
+            pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
+            pose.setOptions({ modelComplexity: 2, smoothLandmarks: true, minDetectionConfidence: 0.65, minTrackingConfidence: 0.65 });
+            pose.onResults(onPoseResults);
+        }
+        
         function startFrameLoop() {
-            if (frameRequestId) stopFrameLoop();
+            if (frameRequestId) cancelAnimationFrame(frameRequestId);
             if (!pose || !videoElement.srcObject) return;
-            isFrameLoopActive = true;
             const processFrame = async () => {
-                if (!isFrameLoopActive) return;
                 if (pose && videoElement.videoWidth && videoElement.videoHeight && videoElement.readyState >= 2 && !isProcessingFrame) {
                     isProcessingFrame = true;
                     try { await pose.send({ image: videoElement }); } catch(e) {}
@@ -763,187 +1076,50 @@
             };
             frameRequestId = requestAnimationFrame(processFrame);
         }
-
+        
         async function setupCameraAndDetection(preferBack = true) {
             const success = await initCameraStream(preferBack);
-            if (success && pose) { stopFrameLoop(); startFrameLoop(); }
+            if (success && pose) { startFrameLoop(); }
             return success;
         }
-        async function switchCamera() { if (isRecording) { alert("录制中无法切换"); return; } const mode = currentStream?.getVideoTracks()[0]?.getSettings().facingMode !== 'environment'; await setupCameraAndDetection(mode); }
-        function retryCamera() { if (isRecording) { alert("录制中无法重置"); return; } setupCameraAndDetection(true); }
-
-        function initPoseDetection() {
-            pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-            pose.setOptions({ modelComplexity: 2, smoothLandmarks: true, minDetectionConfidence: 0.65, minTrackingConfidence: 0.65, smoothSegmentation: true });
-            pose.onResults((results) => {
-                const ctx = poseCanvas.getContext('2d');
-                ctx.clearRect(0, 0, poseCanvas.width, poseCanvas.height);
-                if(results.poseLandmarks) {
-                    if(window.drawingUtils) {
-                        window.drawingUtils.drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS, { color: "#37F5D0", lineWidth: 2 });
-                        window.drawingUtils.drawLandmarks(ctx, results.poseLandmarks, { color: "#FFB347", radius: 1.8 });
-                    }
-                    const analysis = evaluateMovement(results.poseLandmarks);
-                    if (analysis) {
-                        lastValidAnalysis = analysis;
-                        if (!isScoreLocked) throttledUpdateUI(analysis, performance.now());
-                    }
-                } else {
-                    if (!isScoreLocked && lastValidAnalysis) throttledUpdateUI(lastValidAnalysis, performance.now());
-                    else if (!isScoreLocked && !lastValidAnalysis) liveScoreSpan.innerText = "--";
-                }
-            });
-        }
-
-        async function deepAnalyzeForReport(videoEl) {
-            if (!videoEl || !videoEl.videoWidth || videoEl.readyState < 2) return null;
-            const duration = videoEl.duration;
-            if (!duration || duration <= 0.1) return null;
-            const sampleTimes = [0.35, 0.5, 0.65, 0.8];
-            let analyses = [];
-            const wasPlaying = !videoEl.paused;
-            videoEl.pause();
-            for (let t of sampleTimes) {
-                try {
-                    const seekTime = Math.min(duration - 0.1, t * duration);
-                    videoEl.currentTime = seekTime;
-                    await new Promise(r => videoEl.onseeked = r);
-                    await new Promise(r => setTimeout(r, 120));
-                    const canvas = document.createElement('canvas');
-                    canvas.width = videoEl.videoWidth || 640;
-                    canvas.height = videoEl.videoHeight || 360;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                    const tempPose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-                    await tempPose.setOptions({ modelComplexity: 2, smoothLandmarks: false, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
-                    await tempPose.initialize();
-                    const landmarks = await new Promise((resolve) => {
-                        tempPose.onResults(res => resolve(res.poseLandmarks));
-                        tempPose.send({ image: canvas }).catch(() => resolve(null));
-                        setTimeout(() => resolve(null), 600);
-                    });
-                    if (landmarks) {
-                        const res = evaluateMovement(landmarks);
-                        if (res) analyses.push(res);
-                    }
-                    tempPose.close();
-                } catch(e) {}
-            }
-            if (wasPlaying) videoEl.play().catch(()=>{});
-            if (analyses.length === 0) return lastValidAnalysis || null;
-            const avgTechScore = Math.floor(analyses.reduce((s, a) => s + a.technicalScore, 0) / analyses.length);
-            const bestSuggestions = analyses.reduce((a, b) => (a.suggestions.length > b.suggestions.length ? a : b), analyses[0]);
-            const avgMetrics = analyses[0].metrics;
-            return {
-                technicalScore: avgTechScore,
-                metrics: avgMetrics,
-                suggestions: bestSuggestions.suggestions
-            };
-        }
-
-        async function generateDiagnosticReport(videoEl) {
-            const result = await deepAnalyzeForReport(videoEl);
-            if (result) {
-                const techScore = result.technicalScore;
-                const m = result.metrics;
-                let html = `<div class="report-score-card">
-                            <span>📊 诊断报告独立技术分 (团身50+推手20+低头10+髋折10+对称10) </span>
-                            <span class="report-score-value">${techScore}</span>
-                            <span style="font-size:0.7rem;">（保底70分，团身膝角≤105°即可获得45+高分）</span>
-                           </div>`;
-                html += `<div class="mistake-item" style="background:#12453e; border-radius:20px; margin-bottom:6px;"><span class="badge badge-success">🎯 细分项得分（满分权重）</span></div>`;
-                html += `<div class="mistake-item">🧘 团身紧度(膝角${m.kneeAngle}°): ${m.tuckScore}/50分 (膝角≤105°即高分)</div>`;
-                html += `<div class="mistake-item">✊ 推手有力: ${m.pushScore}/20分</div>`;
-                html += `<div class="mistake-item">📐 低头控制: ${m.headScore}/10分 (低头角${m.headAngle}°)</div>`;
-                html += `<div class="mistake-item">🔄 髋部对折: ${m.hipScore}/10分 (髋角${m.hipAngle}°)</div>`;
-                html += `<div class="mistake-item">⚖️ 身体对称: ${m.symScore.toFixed(1)}/10分</div>`;
-                html += `<div class="mistake-item" style="border-top:1px solid #5f9b8c; margin-top:6px;"><span class="badge badge-success">📌 针对性训练建议</span></div>`;
-                result.suggestions.forEach(adv => {
-                    html += `<div class="mistake-item">🔹 ${adv}</div>`;
-                });
-                html += `<div class="advice-highlight">✨ 团身友好评分：只要做出团身动作（膝角≤105°）即可获得45分以上，鼓励每一位学员。</div>`;
-                detailedMistakesDiv.innerHTML = html;
-                compareStatus.innerHTML = `✅ 诊断完成 | 技术分: ${techScore}`;
-            } else {
-                detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 未检测到有效姿态，请确保全身入镜、光线充足。</div>`;
-            }
-        }
-
-        function analyzeCurrentVideo() {
-            if (userRecordedVideo.src && userRecordedVideo.readyState >= 2) generateDiagnosticReport(userRecordedVideo);
-            else detailedMistakesDiv.innerHTML = `<div class="mistake-item">❗ 请先录制或上传后滚翻视频再进行诊断。</div>`;
-        }
-
-        function startRecording() {
-            if (!currentStream || !MediaRecorder) { alert("摄像头未就绪"); return; }
-            recordedChunks = [];
-            let mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4';
-            mediaRecorder = new MediaRecorder(currentStream, { mimeType });
-            mediaRecorder.ondataavailable = (e) => { if(e.data.size) recordedChunks.push(e.data); };
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: mimeType });
-                const url = URL.createObjectURL(blob);
-                if (userRecordedVideo.src && userRecordedVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src);
-                userRecordedVideo.src = url;
-                userRecordedVideo.load();
-                userRecordedVideo.onloadeddata = () => { 
-                    userRecordedVideo.playbackRate = parseFloat(userSpeedSlider.value);
-                    lockCurrentScore();
-                    if(userRecordedVideo.duration) userSeekSlider.max = 100;
-                };
-                isRecording = false;
-                startRecordBtn.disabled = false;
-                stopRecordBtn.disabled = true;
-                startRecordBtn.classList.remove('recording');
-                startRecordBtn.innerText = '🔴 精准录制';
-            };
-            mediaRecorder.start();
-            isRecording = true;
-            startRecordBtn.disabled = true;
-            stopRecordBtn.disabled = false;
-            startRecordBtn.classList.add('recording');
-            startRecordBtn.innerText = '🔴 录制中...';
-            if (isScoreLocked) resetScoreLock();
-        }
-        function stopRecording() { if(mediaRecorder && isRecording) mediaRecorder.stop(); }
+        
+        function uploadUserVideo(file) { if(file) { const url = URL.createObjectURL(file); if(userRecordedVideo.src && userRecordedVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src); userRecordedVideo.src = url; userRecordedVideo.load(); } }
+        function uploadStandardVideo(file) { if(file) { const url = URL.createObjectURL(file); if(refVideo.src && refVideo.src.startsWith('blob:')) URL.revokeObjectURL(refVideo.src); refVideo.src = url; refVideo.load(); refVideo.onloadeddata = () => { compareStatus.innerHTML = "✅ 金牌示范已加载"; refVideo.playbackRate = parseFloat(refSpeedSlider.value); }; } }
         function setUserSpeedSafe() { let v = parseFloat(userSpeedSlider.value); userSpeedVal.innerText = v.toFixed(2)+'x'; if (userRecordedVideo) userRecordedVideo.playbackRate = v; }
         function setRefSpeedSafe() { let v = parseFloat(refSpeedSlider.value); refSpeedVal.innerText = v.toFixed(2)+'x'; if (refVideo) refVideo.playbackRate = v; }
-        function uploadUserVideo(file) { if(file) { resetScoreLock(); const url = URL.createObjectURL(file); if(userRecordedVideo.src && userRecordedVideo.src.startsWith('blob:')) URL.revokeObjectURL(userRecordedVideo.src); userRecordedVideo.src = url; userRecordedVideo.load(); userRecordedVideo.onloadeddata = () => generateDiagnosticReport(userRecordedVideo); } }
-        function uploadStandardVideo(file) { if(file) { const url = URL.createObjectURL(file); if(refVideo.src && refVideo.src.startsWith('blob:')) URL.revokeObjectURL(refVideo.src); refVideo.src = url; refVideo.load(); refVideo.onloadeddata = () => { compareStatus.innerHTML = "✅ 金牌示范已加载"; refVideo.playbackRate = parseFloat(refSpeedSlider.value); }; } }
         function setupVideoControls(video, playBtn, pauseBtn, restartBtn, seekSlider) {
             if (!video) return;
-            const updateSlider = () => { if (video.duration > 0) seekSlider.value = (video.currentTime / video.duration) * 100; };
-            video.addEventListener('timeupdate', updateSlider);
-            video.addEventListener('loadedmetadata', () => { if (video.duration) { seekSlider.max = 100; seekSlider.value = 0; } });
-            playBtn.addEventListener('click', (e) => { e.stopPropagation(); video.play().catch(()=>{}); });
-            pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); video.pause(); });
-            restartBtn.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime = 0; video.play().catch(()=>{}); });
+            video.addEventListener('loadedmetadata', () => { if (video.duration) seekSlider.max = 100; });
+            playBtn.addEventListener('click', () => video.play().catch(()=>{}));
+            pauseBtn.addEventListener('click', () => video.pause());
+            restartBtn.addEventListener('click', () => { video.currentTime = 0; video.play().catch(()=>{}); });
             seekSlider.addEventListener('input', (e) => { if (video.duration > 0) video.currentTime = (e.target.value / 100) * video.duration; });
+            video.addEventListener('timeupdate', () => { if (video.duration > 0) seekSlider.value = (video.currentTime / video.duration) * 100; });
         }
-
+        
         startRecordBtn.addEventListener('click', startRecording);
         stopRecordBtn.addEventListener('click', stopRecording);
-        analyzeCurrentVideoBtn.addEventListener('click', analyzeCurrentVideo);
-        switchCameraBtn.addEventListener('click', switchCamera);
-        retryCameraBtn.addEventListener('click', retryCamera);
+        generateReportBtn.addEventListener('click', generateDeepReport);
+        switchCameraBtn.addEventListener('click', () => setupCameraAndDetection(currentStream?.getVideoTracks()[0]?.getSettings().facingMode !== 'environment'));
+        retryCameraBtn.addEventListener('click', () => setupCameraAndDetection(true));
         uploadVideoInput.addEventListener('change', (e) => { if(e.target.files[0]) uploadUserVideo(e.target.files[0]); });
         uploadRefVideoInput.addEventListener('change', (e) => { if(e.target.files[0]) uploadStandardVideo(e.target.files[0]); });
         applyUserSpeed.addEventListener('click', setUserSpeedSafe);
         applyRefSpeed.addEventListener('click', setRefSpeedSafe);
         userSpeedSlider.addEventListener('input', (e) => userSpeedVal.innerText = parseFloat(e.target.value).toFixed(2)+'x');
         refSpeedSlider.addEventListener('input', (e) => refSpeedVal.innerText = parseFloat(e.target.value).toFixed(2)+'x');
-        resetScoreBtn.addEventListener('click', resetScoreLock);
-        debugDetectBtn.addEventListener('click', async () => { if (!userRecordedVideo.src || userRecordedVideo.readyState < 2) { detailedMistakesDiv.innerHTML = `<div class="mistake-item">⚠️ 请先录制或上传视频</div>`; return; } detailedMistakesDiv.innerHTML = `<div class="mistake-item">🔍 鹰眼深度诊断中...</div>`; await generateDiagnosticReport(userRecordedVideo); });
+        resetScoreBtn.addEventListener('click', () => { if(!isRecording) resetAllState(); });
         setupVideoControls(userRecordedVideo, userPlayBtn, userPauseBtn, userRestartBtn, userSeekSlider);
         setupVideoControls(refVideo, refPlayBtn, refPauseBtn, refRestartBtn, refSeekSlider);
-
+        
         (async () => {
             initPoseDetection();
             await setupCameraAndDetection(true);
             setUserSpeedSafe();
             setRefSpeedSafe();
             window.drawingUtils = window.drawingUtils || drawingUtils;
-            lastValidAnalysis = null;
+            poseDetectionActive = false;
+            scoreLockIndicator.innerText = '⚪ 未录制';
         })();
     })();
 </script>
